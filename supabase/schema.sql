@@ -585,9 +585,9 @@ returns table (
 $$;
 
 -- ---------------------------------------------------------------------
--- Personal share codes: "Group Login" without email.
--- Each person has a code (e.g. K7QM2XPA). Anyone who enters it can view that
--- person's day report (respecting their share settings) until removed.
+-- Group Login without email: each person has a Member No (HT001…) and a PIN.
+-- Anyone who enters both can view that person's day report (respecting their
+-- share settings) until removed or the PIN is changed.
 -- ---------------------------------------------------------------------
 
 alter table public.profiles add column if not exists share_code text unique;
@@ -601,73 +601,6 @@ create table if not exists public.share_links (
 );
 alter table public.share_links enable row level security;
 -- No direct table policies: everything goes through the functions below.
-
--- 8 characters from an alphabet without look-alikes (no 0/O, 1/I/L), crypto-random.
-create or replace function public.new_share_code()
-returns text language plpgsql volatile set search_path = public as $$
-declare
-  alphabet constant text := 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-  b bytea;
-  c text;
-  i int;
-begin
-  loop
-    b := uuid_send(gen_random_uuid());
-    c := '';
-    for i in 0..7 loop
-      c := c || substr(alphabet, 1 + (get_byte(b, i) % length(alphabet)), 1);
-    end loop;
-    exit when not exists (select 1 from profiles where share_code = c);
-  end loop;
-  return c;
-end $$;
-revoke execute on function public.new_share_code() from public, anon, authenticated;
-
-create or replace function public.my_share_code()
-returns text language plpgsql security definer set search_path = public as $$
-declare c text;
-begin
-  if auth.uid() is null then raise exception 'NOT_AUTHENTICATED'; end if;
-  if not exists (select 1 from profiles where id = auth.uid()) then raise exception 'NO_PROFILE'; end if;
-  select share_code into c from profiles where id = auth.uid();
-  if c is null then
-    c := public.new_share_code();
-    update profiles set share_code = c where id = auth.uid();
-  end if;
-  return c;
-end $$;
-
--- New code; everyone who used the old code loses access.
-create or replace function public.reset_share_code()
-returns text language plpgsql security definer set search_path = public as $$
-declare c text;
-begin
-  if not exists (select 1 from profiles where id = auth.uid()) then raise exception 'NO_PROFILE'; end if;
-  c := public.new_share_code();
-  update profiles set share_code = c where id = auth.uid();
-  delete from share_links where owner_id = auth.uid();
-  return c;
-end $$;
-
--- Viewer enters a code. Returns the owner's name.
-create or replace function public.add_share_code(p_code text, p_name text default '')
-returns text language plpgsql security definer set search_path = public as $$
-declare
-  v_owner public.profiles;
-  code text := upper(regexp_replace(coalesce(p_code, ''), '[^A-Za-z0-9]', '', 'g'));
-begin
-  if auth.uid() is null then raise exception 'NOT_AUTHENTICATED'; end if;
-  select * into v_owner from profiles where share_code = code;
-  if v_owner.id is null then raise exception 'INVALID_CODE'; end if;
-  if v_owner.id = auth.uid() then raise exception 'OWN_CODE'; end if;
-  if (select count(*) from share_links where viewer_id = auth.uid()) >= 20 then
-    raise exception 'TOO_MANY_PEOPLE';
-  end if;
-  insert into share_links (owner_id, viewer_id, viewer_name)
-  values (v_owner.id, auth.uid(), left(trim(coalesce(p_name, '')), 40))
-  on conflict (owner_id, viewer_id) do update set viewer_name = excluded.viewer_name;
-  return v_owner.name;
-end $$;
 
 -- Day report for everyone whose code I entered.
 create or replace function public.get_shared_dashboard(p_day date)
@@ -705,10 +638,10 @@ returns void language sql security definer set search_path = public as $$
   delete from share_links where viewer_id = auth.uid() and owner_id = p_owner;
 $$;
 
-revoke execute on function public.my_share_code(), public.reset_share_code(), public.add_share_code(text, text),
+revoke execute on function
   public.get_shared_dashboard(date), public.my_viewers(), public.remove_viewer(uuid), public.remove_shared(uuid)
 from anon, public;
-grant execute on function public.my_share_code(), public.reset_share_code(), public.add_share_code(text, text),
+grant execute on function
   public.get_shared_dashboard(date), public.my_viewers(), public.remove_viewer(uuid), public.remove_shared(uuid)
 to authenticated;
 
@@ -727,6 +660,96 @@ grant execute on function
   public.get_group_dashboard(uuid, date), public.get_group_summary(uuid, date, date),
   public.get_group_challenge(uuid, date)
 to authenticated;
+
+-- Member numbers (HT001, HT002 …) + 4-digit PIN for Group Login.
+-- The number is easy to say; the PIN stops strangers from simply trying numbers.
+-- After 5 wrong PINs in an hour, that member number is locked for the hour.
+
+drop function if exists public.my_share_code();
+drop function if exists public.reset_share_code();
+drop function if exists public.add_share_code(text, text);
+drop function if exists public.new_share_code();
+
+create sequence if not exists public.member_no_seq start 1;
+alter table public.profiles add column if not exists member_no int unique;
+alter table public.profiles add column if not exists share_pin text;
+
+create table if not exists public.share_attempts (
+  owner_id uuid not null references auth.users (id) on delete cascade,
+  at       timestamptz not null default now()
+);
+create index if not exists share_attempts_owner_at on public.share_attempts (owner_id, at);
+alter table public.share_attempts enable row level security;  -- no policies: functions only
+
+create or replace function public.new_pin()
+returns text language sql volatile as $$
+  select lpad(((get_byte(b, 0) * 256 + get_byte(b, 1)) % 10000)::text, 4, '0')
+  from (select uuid_send(gen_random_uuid()) as b) x;
+$$;
+revoke execute on function public.new_pin() from public, anon, authenticated;
+
+-- "HT001"
+create or replace function public.member_label(n int)
+returns text language sql immutable as $$ select 'HT' || lpad(n::text, 3, '0') $$;
+
+-- My member number and PIN (created the first time).
+create or replace function public.my_member_card()
+returns table (member_id text, pin text)
+language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null then raise exception 'NOT_AUTHENTICATED'; end if;
+  if not exists (select 1 from profiles where id = auth.uid()) then raise exception 'NO_PROFILE'; end if;
+  update profiles set member_no = nextval('public.member_no_seq')
+    where id = auth.uid() and member_no is null;
+  update profiles set share_pin = public.new_pin()
+    where id = auth.uid() and share_pin is null;
+  return query
+    select public.member_label(p.member_no), p.share_pin from profiles p where p.id = auth.uid();
+end $$;
+
+-- New PIN; everyone who used the old one loses access.
+create or replace function public.reset_member_pin()
+returns table (member_id text, pin text)
+language plpgsql security definer set search_path = public as $$
+begin
+  if not exists (select 1 from profiles where id = auth.uid()) then raise exception 'NO_PROFILE'; end if;
+  update profiles set share_pin = public.new_pin() where id = auth.uid();
+  delete from share_links where owner_id = auth.uid();
+  return query select * from public.my_member_card();
+end $$;
+
+-- Viewer enters Member No + PIN. Returns 'OK:<name>' or an error word.
+-- (Returns instead of raising so failed attempts are kept for the lock-out.)
+create or replace function public.add_member(p_member_id text, p_pin text, p_name text default '')
+returns text language plpgsql security definer set search_path = public as $$
+declare
+  v_owner public.profiles;
+  v_no int := nullif(regexp_replace(coalesce(p_member_id, ''), '[^0-9]', '', 'g'), '')::int;
+begin
+  if auth.uid() is null then return 'NOT_AUTHENTICATED'; end if;
+  if v_no is null then return 'MEMBER_NOT_FOUND'; end if;
+  select * into v_owner from profiles where member_no = v_no;
+  if v_owner.id is null then return 'MEMBER_NOT_FOUND'; end if;
+  if v_owner.id = auth.uid() then return 'OWN_CODE'; end if;
+  if (select count(*) from share_attempts a where a.owner_id = v_owner.id and a.at > now() - interval '1 hour') >= 5 then
+    return 'TOO_MANY_TRIES';
+  end if;
+  if v_owner.share_pin is null or trim(coalesce(p_pin, '')) <> v_owner.share_pin then
+    insert into share_attempts (owner_id) values (v_owner.id);
+    return 'WRONG_PIN';
+  end if;
+  if (select count(*) from share_links where viewer_id = auth.uid()) >= 20 then return 'TOO_MANY_PEOPLE'; end if;
+  insert into share_links (owner_id, viewer_id, viewer_name)
+  values (v_owner.id, auth.uid(), left(trim(coalesce(p_name, '')), 40))
+  on conflict (owner_id, viewer_id) do update set viewer_name = excluded.viewer_name;
+  return 'OK:' || coalesce(v_owner.name, '');
+end $$;
+
+revoke execute on function public.my_member_card(), public.reset_member_pin(), public.add_member(text, text, text)
+from anon, public;
+grant execute on function public.my_member_card(), public.reset_member_pin(), public.add_member(text, text, text)
+to authenticated;
+grant usage on sequence public.member_no_seq to service_role;
 
 -- ---------------------------------------------------------------------
 -- Table privileges for the API roles.

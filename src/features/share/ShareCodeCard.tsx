@@ -7,17 +7,17 @@ import { useAuth } from '@/data/auth';
 import { useData } from '@/data/store';
 import { isSupabaseConfigured } from '@/lib/env';
 import { useSettings } from '@/theme/settings';
-import { formatCode, myShareCode, myViewers, removeViewer, resetShareCode, shareErrorKey, type Viewer } from './api';
+import { myMemberCard, myViewers, removeViewer, resetMemberPin, shareErrorKey, type MemberCard, type Viewer } from './api';
 
 /**
- * Owner side of share codes: my code, share buttons, who can see my data.
- * `compact` (Home) shows just the code and share buttons.
+ * Owner side: my Member No (HT001) + PIN, share buttons, who can see my data.
+ * `compact` (Home) shows just the number, PIN and share buttons.
  */
 export function ShareCodeCard({ compact = false }: { compact?: boolean }) {
   const { t, colors: c } = useSettings();
   const { userId, guest, startAnonymous } = useAuth();
   const { syncNow } = useData();
-  const [code, setCode] = useState<string | null>(null);
+  const [card, setCard] = useState<MemberCard | null>(null);
   const [viewers, setViewers] = useState<Viewer[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,16 +27,16 @@ export function ShareCodeCard({ compact = false }: { compact?: boolean }) {
     setBusy(true);
     setError(null);
     try {
-      let c2: string;
+      let mc: MemberCard;
       try {
-        c2 = await myShareCode();
+        mc = await myMemberCard();
       } catch (e) {
         // Right after "Start" the profile may not be uploaded yet: sync, then retry once.
-        if (shareErrorKey(e) !== 'err_no_profile_yet') throw e;
+        if (!String((e as Error).message).includes('NO_PROFILE')) throw e;
         await syncNow();
-        c2 = await myShareCode();
+        mc = await myMemberCard();
       }
-      setCode(c2);
+      setCard(mc);
       if (!compact) setViewers(await myViewers());
     } catch (e) {
       const key = shareErrorKey(e);
@@ -58,7 +58,7 @@ export function ShareCodeCard({ compact = false }: { compact?: boolean }) {
     if (!guest) return null;
     return (
       <Card>
-        <SectionTitle>🔑 {t('my_share_code')}</SectionTitle>
+        <SectionTitle>🔑 {t('my_member_no')}</SectionTitle>
         <Txt muted style={{ marginBottom: 10 }}>
           {t('share_code_needs_cloud')}
         </Txt>
@@ -81,8 +81,9 @@ export function ShareCodeCard({ compact = false }: { compact?: boolean }) {
     );
   }
 
-  const pretty = code ? formatCode(code) : '';
-  const message = t('share_code_message', { code: pretty, link: Linking.createURL('/') });
+  const message = card
+    ? t('member_share_message', { id: card.member_id, pin: card.pin, link: Linking.createURL('/') })
+    : '';
 
   const shareWhatsApp = async () => {
     try {
@@ -93,14 +94,14 @@ export function ShareCodeCard({ compact = false }: { compact?: boolean }) {
   };
 
   const confirmReset = () =>
-    Alert.alert(t('new_code'), t('new_code_confirm'), [
+    Alert.alert(t('change_pin'), t('change_pin_confirm'), [
       { text: t('cancel'), style: 'cancel' },
       {
-        text: t('new_code'),
+        text: t('change_pin'),
         style: 'destructive',
         onPress: async () => {
           try {
-            setCode(await resetShareCode());
+            setCard(await resetMemberPin());
             setViewers([]);
           } catch (e) {
             Alert.alert(t('error'), String((e as Error).message ?? e));
@@ -122,32 +123,50 @@ export function ShareCodeCard({ compact = false }: { compact?: boolean }) {
       },
     ]);
 
+  const box = (label: string, value: string) => (
+    <View style={{ flex: 1, alignItems: 'center', backgroundColor: c.card, borderRadius: 14, paddingVertical: 10 }}>
+      <Txt muted size="small">
+        {label}
+      </Txt>
+      <Txt size="title" bold color={c.primary} style={{ letterSpacing: 3 }}>
+        {value}
+      </Txt>
+    </View>
+  );
+
   return (
     <Card style={{ backgroundColor: c.primarySoft, borderColor: c.primary }}>
-      <SectionTitle>🔑 {t('my_share_code')}</SectionTitle>
-      {busy && !code ? (
+      <SectionTitle>🔑 {t('my_member_no')}</SectionTitle>
+      {busy && !card ? (
         <ActivityIndicator color={c.primary} />
       ) : error ? (
         <View style={{ gap: 8 }}>
           <Txt color={c.danger}>{error}</Txt>
           <Button small variant="outline" icon="refresh" title={t('retry')} onPress={load} />
         </View>
-      ) : (
+      ) : card ? (
         <>
-          <Txt size="hero" bold color={c.primary} center style={{ letterSpacing: 4 }} >
-            {pretty}
-          </Txt>
-          <Txt muted size="small" center style={{ marginBottom: 10 }}>
-            {t('share_code_hint')}
+          <Row gap={10}>
+            {box(t('member_no'), card.member_id)}
+            {box(t('pin'), card.pin)}
+          </Row>
+          <Txt muted size="small" center style={{ marginVertical: 10 }}>
+            {t('member_share_hint')}
           </Txt>
           <Row gap={10}>
-            <Button style={{ flex: 1, backgroundColor: '#25D366', borderColor: '#25D366' }} small icon="whatsapp" title="WhatsApp" onPress={shareWhatsApp} />
+            <Button
+              style={{ flex: 1, backgroundColor: '#25D366', borderColor: '#25D366' }}
+              small
+              icon="whatsapp"
+              title="WhatsApp"
+              onPress={shareWhatsApp}
+            />
             <Button style={{ flex: 1 }} small variant="outline" icon="share-variant" title={t('share')} onPress={() => Share.share({ message })} />
           </Row>
         </>
-      )}
+      ) : null}
 
-      {!compact && code && (
+      {!compact && card && (
         <View style={{ marginTop: 14 }}>
           <Txt bold>
             👀 {t('who_can_see')} ({viewers.length})
@@ -167,7 +186,7 @@ export function ShareCodeCard({ compact = false }: { compact?: boolean }) {
               />
             ))
           )}
-          <Button small variant="ghost" icon="key-change" title={t('new_code')} onPress={confirmReset} style={{ marginTop: 6 }} />
+          <Button small variant="ghost" icon="key-change" title={t('change_pin')} onPress={confirmReset} style={{ marginTop: 6 }} />
         </View>
       )}
     </Card>

@@ -2,11 +2,11 @@ import type { TKey } from '@/i18n';
 import { supabase } from '@/lib/supabase';
 import type { DashboardRow } from '@/features/group/api';
 
-/** "K7QM2XPA" → "K7QM-2XPA" for display. */
-export const formatCode = (c: string) => (c.length === 8 ? `${c.slice(0, 4)}-${c.slice(4)}` : c);
-
-/** Accepts "k7qm-2xpa", "K7QM 2XPA" … */
-export const cleanCode = (c: string) => c.toUpperCase().replace(/[^A-Z0-9]/g, '');
+/** Member number + PIN that lets family view my daily report. */
+export interface MemberCard {
+  member_id: string; // "HT001"
+  pin: string; // "2827"
+}
 
 export interface Viewer {
   viewer_id: string;
@@ -14,25 +14,48 @@ export interface Viewer {
   created_at: string;
 }
 
+/** "ht 1", "1", "HT001" → "HT001" (empty string if there are no digits). */
+export function normalizeMemberId(s: string): string {
+  const digits = s.replace(/\D/g, '');
+  return digits ? `HT${digits.padStart(3, '0')}` : '';
+}
+
+export const isValidPin = (s: string) => /^\d{4}$/.test(s.trim());
+
 async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.rpc(fn, args);
   if (error) throw error;
   return data as T;
 }
 
-export const myShareCode = () => rpc<string>('my_share_code');
-export const resetShareCode = () => rpc<string>('reset_share_code');
+export async function myMemberCard(): Promise<MemberCard> {
+  const rows = await rpc<MemberCard[]>('my_member_card');
+  return rows[0];
+}
+
+export async function resetMemberPin(): Promise<MemberCard> {
+  const rows = await rpc<MemberCard[]>('reset_member_pin');
+  return rows[0];
+}
+
 export const myViewers = () => rpc<Viewer[]>('my_viewers');
 export const removeViewer = (viewerId: string) => rpc<void>('remove_viewer', { p_viewer: viewerId });
 export const removeShared = (ownerId: string) => rpc<void>('remove_shared', { p_owner: ownerId });
 
-/** Returns the owner's name. */
-export const addShareCode = (code: string, name: string) =>
-  rpc<string>('add_share_code', { p_code: cleanCode(code), p_name: name.trim() });
+/** Adds a member by number + PIN. Returns their name; throws an Error whose message is the reason code. */
+export async function addMember(memberId: string, pin: string, name: string): Promise<string> {
+  const result = await rpc<string>('add_member', {
+    p_member_id: normalizeMemberId(memberId),
+    p_pin: pin.trim(),
+    p_name: name.trim(),
+  });
+  if (typeof result === 'string' && result.startsWith('OK:')) return result.slice(3);
+  throw new Error(result || 'UNKNOWN');
+}
 
 const num = (v: unknown) => (v == null ? null : Number(v));
 
-/** Day report of everyone whose code I entered, shaped like a group dashboard row. */
+/** Day report of everyone I added, shaped like a group dashboard row. */
 export async function fetchShared(day: string): Promise<DashboardRow[]> {
   const rows = await rpc<Record<string, unknown>[]>('get_shared_dashboard', { p_day: day });
   return (rows ?? []).map((r) => ({
@@ -60,7 +83,9 @@ export async function fetchShared(day: string): Promise<DashboardRow[]> {
 }
 
 const KNOWN: Record<string, TKey> = {
-  INVALID_CODE: 'err_share_code',
+  MEMBER_NOT_FOUND: 'err_member_not_found',
+  WRONG_PIN: 'err_wrong_pin',
+  TOO_MANY_TRIES: 'err_too_many_tries',
   OWN_CODE: 'err_own_code',
   TOO_MANY_PEOPLE: 'err_too_many_people',
   NO_PROFILE: 'err_no_profile_yet',
@@ -72,10 +97,12 @@ export function shareErrorKey(e: unknown): TKey | null {
   return hit ? KNOWN[hit] : null;
 }
 
-// Tiny signal so the viewer list reloads after a code is added elsewhere (e.g. on the login screen).
+// Tiny signal so the viewer list reloads after a member is added elsewhere (e.g. on the login screen).
 const listeners = new Set<() => void>();
 export function onSharedChanged(cb: () => void): () => void {
   listeners.add(cb);
-  return () => listeners.delete(cb);
+  return () => {
+    listeners.delete(cb);
+  };
 }
 export const emitSharedChanged = () => listeners.forEach((cb) => cb());

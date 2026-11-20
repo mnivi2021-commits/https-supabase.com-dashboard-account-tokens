@@ -1,19 +1,17 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Alert, RefreshControl, View } from 'react-native';
 
-import { Button, Card, Field, Row, Screen, Txt } from '@/components/ui';
+import { Button, Card, Row, Screen, Txt } from '@/components/ui';
 import { signedPhotoUrls } from '@/data/sync';
 import type { DashboardRow } from '@/features/group/api';
 import { MemberCard } from '@/features/group/GroupView';
 import type { TKey } from '@/i18n';
 import { addDays, todayKey, weekdayIndex } from '@/lib/dates';
 import { useSettings } from '@/theme/settings';
-import { addShareCode, cleanCode, fetchShared, onSharedChanged, removeShared, shareErrorKey } from './api';
+import { AddMemberForm } from './AddMemberForm';
+import { addMember, fetchShared, onSharedChanged, removeShared, shareErrorKey } from './api';
 
-const NAME_KEY = 'ht:viewer-name';
-
-/** Viewer side of share codes: people whose code I entered, with day arrows. */
+/** Viewer side: people I added by Member No + PIN, with day arrows. */
 export function SharedScreen({ header, edges }: { header?: ReactNode; edges?: ('top' | 'bottom' | 'left' | 'right')[] }) {
   const { t, colors: c } = useSettings();
   const [day, setDay] = useState(todayKey());
@@ -23,15 +21,7 @@ export function SharedScreen({ header, edges }: { header?: ReactNode; edges?: ('
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [code, setCode] = useState('');
-  const [name, setName] = useState('');
   const [adding, setAdding] = useState(false);
-
-  useEffect(() => {
-    AsyncStorage.getItem(NAME_KEY)
-      .then((n) => n && setName(n))
-      .catch(() => {});
-  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -58,17 +48,17 @@ export function SharedScreen({ header, edges }: { header?: ReactNode; edges?: ('
     setRefreshing(false);
   };
 
-  const add = async () => {
+  const add = async (memberId: string, pin: string, name: string) => {
     setAdding(true);
     try {
-      await AsyncStorage.setItem(NAME_KEY, name.trim()).catch(() => {});
-      const owner = await addShareCode(code, name);
-      setCode('');
+      const owner = await addMember(memberId, pin, name);
       Alert.alert(t('added'), t('now_viewing', { name: owner }));
       await load();
+      return true;
     } catch (e) {
       const key = shareErrorKey(e);
       Alert.alert(t('error'), key ? t(key) : String((e as Error).message ?? e));
+      return false;
     } finally {
       setAdding(false);
     }
@@ -100,25 +90,7 @@ export function SharedScreen({ header, edges }: { header?: ReactNode; edges?: ('
     <Screen edges={edges} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={c.primary} />}>
       {header}
 
-      <Card>
-        <Txt bold size="large">
-          ➕ {t('enter_share_code')}
-        </Txt>
-        <Txt muted size="small" style={{ marginBottom: 10 }}>
-          {t('enter_share_code_hint')}
-        </Txt>
-        <Field
-          label={t('share_code')}
-          value={code}
-          onChangeText={setCode}
-          placeholder="K7QM-2XPA"
-          autoCapitalize="characters"
-          autoCorrect={false}
-          maxLength={11}
-        />
-        <Field label={t('your_name')} value={name} onChangeText={setName} placeholder={t('name_placeholder')} />
-        <Button icon="account-eye" title={t('view_details')} disabled={cleanCode(code).length !== 8} loading={adding} onPress={add} />
-      </Card>
+      <AddMemberForm onSubmit={add} loading={adding} />
 
       <Row style={{ justifyContent: 'space-between' }}>
         <Txt muted size="small" style={{ flex: 1 }}>
