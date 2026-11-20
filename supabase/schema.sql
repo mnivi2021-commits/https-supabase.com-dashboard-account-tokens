@@ -583,3 +583,16 @@ grant execute on function
   public.get_group_dashboard(uuid, date), public.get_group_summary(uuid, date, date),
   public.get_group_challenge(uuid, date)
 to authenticated;
+
+-- ---------------------------------------------------------------------
+-- Table privileges for the API roles.
+-- Newer Supabase projects do NOT grant these automatically for tables made in SQL,
+-- and without them every request fails with "permission denied" (42501).
+-- Row Level Security above still limits each user to their own rows / their groups.
+-- ---------------------------------------------------------------------
+
+grant usage on schema public to anon, authenticated, service_role;
+grant select, insert, update, delete on all tables in schema public to authenticated;
+grant all on all tables in schema public to service_role;
+-- Signed-out (anon) users get no table access at all.
+revoke all on all tables in schema public from anon;
