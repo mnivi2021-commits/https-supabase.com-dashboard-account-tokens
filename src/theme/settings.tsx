@@ -17,6 +17,9 @@ interface SettingsValue {
   setLanguage: (l: Language) => void;
   appMode: AppMode;
   setAppMode: (m: AppMode) => void;
+  /** Ask for the phone PIN / fingerprint when the app opens. */
+  appLock: boolean;
+  setAppLock: (on: boolean) => void;
   isDark: boolean;
   colors: Colors;
   t: (key: TKey, vars?: Record<string, string | number>) => string;
@@ -31,46 +34,56 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [themeMode, setThemeModeState] = useState<ThemeMode>('system');
   const [language, setLanguageState] = useState<Language>('en');
   const [appMode, setAppModeState] = useState<AppMode>('me');
+  const [appLock, setAppLockState] = useState(false);
 
   useEffect(() => {
     AsyncStorage.getItem(KEY)
       .then((raw) => {
         if (!raw) return;
-        const s = JSON.parse(raw) as { themeMode?: ThemeMode; language?: Language; appMode?: AppMode };
+        const s = JSON.parse(raw) as { themeMode?: ThemeMode; language?: Language; appMode?: AppMode; appLock?: boolean };
         if (s.themeMode) setThemeModeState(s.themeMode);
         if (s.language) setLanguageState(s.language);
         if (s.appMode) setAppModeState(s.appMode);
+        if (s.appLock) setAppLockState(true);
       })
       .catch(() => {})
       .finally(() => setReady(true));
   }, []);
 
-  const persist = useCallback((next: { themeMode: ThemeMode; language: Language; appMode: AppMode }) => {
+  const persist = useCallback((next: { themeMode: ThemeMode; language: Language; appMode: AppMode; appLock: boolean }) => {
     AsyncStorage.setItem(KEY, JSON.stringify(next)).catch(() => {});
   }, []);
 
   const setThemeMode = useCallback(
     (m: ThemeMode) => {
       setThemeModeState(m);
-      persist({ themeMode: m, language, appMode });
+      persist({ themeMode: m, language, appMode, appLock });
     },
-    [language, appMode, persist],
+    [language, appMode, appLock, persist],
   );
 
   const setLanguage = useCallback(
     (l: Language) => {
       setLanguageState(l);
-      persist({ themeMode, language: l, appMode });
+      persist({ themeMode, language: l, appMode, appLock });
     },
-    [themeMode, appMode, persist],
+    [themeMode, appMode, appLock, persist],
   );
 
   const setAppMode = useCallback(
     (m: AppMode) => {
       setAppModeState(m);
-      persist({ themeMode, language, appMode: m });
+      persist({ themeMode, language, appMode: m, appLock });
     },
-    [themeMode, language, persist],
+    [themeMode, language, appLock, persist],
+  );
+
+  const setAppLock = useCallback(
+    (on: boolean) => {
+      setAppLockState(on);
+      persist({ themeMode, language, appMode, appLock: on });
+    },
+    [themeMode, language, appMode, persist],
   );
 
   const value = useMemo<SettingsValue>(() => {
@@ -83,11 +96,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setLanguage,
       appMode,
       setAppMode,
+      appLock,
+      setAppLock,
       isDark,
       colors: isDark ? palettes.dark : palettes.light,
       t: (key, vars) => translate(language, key, vars),
     };
-  }, [ready, themeMode, setThemeMode, language, setLanguage, appMode, setAppMode, scheme]);
+  }, [ready, themeMode, setThemeMode, language, setLanguage, appMode, setAppMode, appLock, setAppLock, scheme]);
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
 }

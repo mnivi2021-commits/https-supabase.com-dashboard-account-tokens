@@ -68,6 +68,18 @@
             "backgroundColor": "#0A1511"
           }
         }
+      ],
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "Health Tracker lets you pick a family member from your contacts to invite to your group."
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Health Tracker uses Face ID to lock the app when you turn on App Lock."
+        }
       ]
     ],
     "experiments": {

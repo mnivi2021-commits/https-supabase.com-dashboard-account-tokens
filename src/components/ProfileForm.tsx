@@ -10,13 +10,23 @@ import { useSettings, useTheme } from '@/theme/settings';
 import { WaveBanner } from './AppHeader';
 import { MeasureGuide } from './MeasureGuide';
 import { choosePhoto } from './pickers';
-import { Card, Chip, Icon, Row, Txt, type IconName } from './ui';
+import { Button, Card, Chip, Icon, ProgressBar, Row, Txt, type IconName } from './ui';
 import { BRAND, GradientButton } from './WelcomeArt';
 
 export type ProfileDraft = Omit<Profile, 'updated_at'>;
 
 /** Label column with icon + red star, as in the design. */
-function FormRow({ icon, label, required, children }: { icon: IconName; label: string; required?: boolean; children: ReactNode }) {
+function FormRow({
+  icon,
+  label,
+  required,
+  children,
+}: {
+  icon: IconName;
+  label: string;
+  required?: boolean;
+  children: ReactNode;
+}) {
   const { colors: c, isDark } = useSettings();
   return (
     <View style={{ paddingVertical: 8 }}>
@@ -97,7 +107,10 @@ function Select<T extends string | number>({
         <MaterialCommunityIcons name="chevron-down" size={24} color={c.muted} />
       </Pressable>
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <Pressable style={{ flex: 1, backgroundColor: '#0008', justifyContent: 'center', padding: 24 }} onPress={() => setOpen(false)}>
+        <Pressable
+          style={{ flex: 1, backgroundColor: '#0008', justifyContent: 'center', padding: 24 }}
+          onPress={() => setOpen(false)}
+        >
           <Pressable style={{ backgroundColor: c.card, borderRadius: 20, padding: 12, maxHeight: '75%' }}>
             <Txt bold size="large" style={{ padding: 8 }}>
               {title}
@@ -140,7 +153,11 @@ function Select<T extends string | number>({
 function HowTo({ open, onToggle, label }: { open: boolean; onToggle: () => void; label: string }) {
   const c = useTheme();
   return (
-    <Pressable onPress={onToggle} hitSlop={8} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 }}>
+    <Pressable
+      onPress={onToggle}
+      hitSlop={8}
+      style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 }}
+    >
       <MaterialCommunityIcons name={open ? 'chevron-up' : 'lightbulb-on-outline'} size={18} color={c.secondary} />
       <Txt size="small" bold color={c.secondary}>
         {label}
@@ -157,7 +174,10 @@ export function ProfileForm({
   initial,
   submitLabel,
   onSubmit,
+  wizard = false,
 }: {
+  /** First-time setup: one question per screen with a progress bar. */
+  wizard?: boolean;
   initial?: Partial<Profile>;
   submitLabel: string;
   onSubmit: (draft: ProfileDraft, photoChanged: boolean) => void;
@@ -178,6 +198,7 @@ export function ProfileForm({
   const [issues, setIssues] = useState(initial?.health_issues ?? '');
   const [photo, setPhoto] = useState<string | null>(initial?.photo_uri ?? null);
   const [guide, setGuide] = useState<'height' | 'weight' | 'photo' | null>(null);
+  const [step, setStep] = useState(0);
 
   const heightCm =
     unit === 'cm'
@@ -188,6 +209,22 @@ export function ProfileForm({
   const w = parseFloat(weight);
   const a = parseInt(age, 10);
   const tw = parseFloat(target) || w;
+
+  // Wizard steps (question keys) and whether each one is filled in.
+  const STEPS = ['q_name', 'q_age', 'q_gender', 'q_height', 'q_weight', 'q_blood', 'q_photo', 'q_target'] as const;
+  const stepValid = [
+    name.trim().length > 0,
+    a >= 5 && a <= 110,
+    !!gender,
+    heightCm >= 80 && heightCm <= 250,
+    w >= 15 && w <= 300,
+    !!blood,
+    true,
+    tw >= 15 && tw <= 300,
+  ];
+  /** In wizard mode only the current step is shown. */
+  const show = (i: number) => !wizard || step === i;
+  const last = step === STEPS.length - 1;
 
   const dateOptions = [
     ...(initial?.target_date ? [{ value: initial.target_date, label: initial.target_date }] : []),
@@ -280,105 +317,270 @@ export function ProfileForm({
 
   return (
     <View style={{ gap: 14 }}>
-      <WaveBanner title={t('my_profile')} subtitle={t('enter_health_details')} left={avatar} />
-      <HowTo open={guide === 'photo'} onToggle={() => setGuide(guide === 'photo' ? null : 'photo')} label={t('guide_photo_title')} />
-      {guide === 'photo' && <MeasureGuide kind="photo" />}
+      <WaveBanner
+        title={t('my_profile')}
+        subtitle={wizard ? t('step_of', { n: step + 1, total: STEPS.length }) : t('enter_health_details')}
+        left={avatar}
+      />
+      {wizard ? (
+        <View style={{ gap: 8 }}>
+          <ProgressBar value={((step + 1) / STEPS.length) * 100} height={12} />
+          <Txt size="title" bold>
+            {t(STEPS[step])}
+          </Txt>
+        </View>
+      ) : (
+        <>
+          <HowTo
+            open={guide === 'photo'}
+            onToggle={() => setGuide(guide === 'photo' ? null : 'photo')}
+            label={t('guide_photo_title')}
+          />
+          {guide === 'photo' && <MeasureGuide kind="photo" />}
+        </>
+      )}
 
       <Card style={{ borderRadius: 24 }}>
-        <FormRow icon="account-outline" label={t('name')} required>
-          <Input value={name} onChangeText={setName} placeholder={t('name_placeholder')} />
-        </FormRow>
+        {show(0) && (
+          <>
+            <FormRow icon="account-outline" label={t('name')} required>
+              <Input value={name} onChangeText={setName} placeholder={t('name_placeholder')} />
+            </FormRow>
+          </>
+        )}
 
-        <FormRow icon="calendar-month-outline" label={t('age_years')} required>
-          <Input value={age} onChangeText={setAge} keyboardType="number-pad" placeholder="35" maxLength={3} />
-        </FormRow>
+        {show(1) && (
+          <>
+            <FormRow icon="calendar-month-outline" label={t('age_years')} required>
+              <Input value={age} onChangeText={setAge} keyboardType="number-pad" placeholder="35" maxLength={3} />
+            </FormRow>
+          </>
+        )}
 
-        <FormRow icon="gender-male-female" label={t('gender')} required>
-          <Row gap={10}>
-            <Chip label={`♂ ${t('male')}`} selected={gender === 'male'} onPress={() => setGender('male')} />
-            <Chip label={`♀ ${t('female')}`} selected={gender === 'female'} onPress={() => setGender('female')} color="#DB2777" />
-          </Row>
-        </FormRow>
+        {show(2) && (
+          <>
+            <FormRow icon="gender-male-female" label={t('gender')} required>
+              <Row gap={10}>
+                <Chip label={`♂ ${t('male')}`} selected={gender === 'male'} onPress={() => setGender('male')} />
+                <Chip
+                  label={`♀ ${t('female')}`}
+                  selected={gender === 'female'}
+                  onPress={() => setGender('female')}
+                  color="#DB2777"
+                />
+              </Row>
+            </FormRow>
+          </>
+        )}
 
-        <FormRow icon="ruler" label={t('height')} required>
-          <Row gap={8}>
-            {unit === 'cm' ? (
-              <Input style={{ flex: 1 }} value={cm} onChangeText={setCm} keyboardType="numeric" placeholder="162" />
-            ) : (
-              <>
-                <Input style={{ flex: 1 }} value={ft} onChangeText={setFt} keyboardType="number-pad" placeholder={`5 ${t('feet')}`} />
-                <Input style={{ flex: 1 }} value={inch} onChangeText={setInch} keyboardType="number-pad" placeholder={`4 ${t('inches')}`} />
-              </>
-            )}
-            <View style={{ width: 96 }}>
-              <Select<HeightUnit>
-                title={t('height')}
-                value={unit}
-                onChange={(u) => {
-                  if (u === 'ft' && Number.isFinite(heightCm)) {
-                    const v = cmToFeetInches(heightCm);
-                    setFt(String(v.feet));
-                    setInch(String(v.inches));
-                  }
-                  if (u === 'cm' && Number.isFinite(heightCm)) setCm(String(Math.round(heightCm)));
-                  setUnit(u);
-                }}
-                options={[
-                  { value: 'cm', label: 'cm' },
-                  { value: 'ft', label: 'ft/in' },
-                ]}
+        {show(3) && (
+          <>
+            <FormRow icon="ruler" label={t('height')} required>
+              <Row gap={8}>
+                {unit === 'cm' ? (
+                  <Input style={{ flex: 1 }} value={cm} onChangeText={setCm} keyboardType="numeric" placeholder="162" />
+                ) : (
+                  <>
+                    <Input
+                      style={{ flex: 1 }}
+                      value={ft}
+                      onChangeText={setFt}
+                      keyboardType="number-pad"
+                      placeholder={`5 ${t('feet')}`}
+                    />
+                    <Input
+                      style={{ flex: 1 }}
+                      value={inch}
+                      onChangeText={setInch}
+                      keyboardType="number-pad"
+                      placeholder={`4 ${t('inches')}`}
+                    />
+                  </>
+                )}
+                <View style={{ width: 96 }}>
+                  <Select<HeightUnit>
+                    title={t('height')}
+                    value={unit}
+                    onChange={(u) => {
+                      if (u === 'ft' && Number.isFinite(heightCm)) {
+                        const v = cmToFeetInches(heightCm);
+                        setFt(String(v.feet));
+                        setInch(String(v.inches));
+                      }
+                      if (u === 'cm' && Number.isFinite(heightCm)) setCm(String(Math.round(heightCm)));
+                      setUnit(u);
+                    }}
+                    options={[
+                      { value: 'cm', label: 'cm' },
+                      { value: 'ft', label: 'ft/in' },
+                    ]}
+                  />
+                </View>
+              </Row>
+              <HowTo
+                open={guide === 'height'}
+                onToggle={() => setGuide(guide === 'height' ? null : 'height')}
+                label={t('guide_height_title')}
               />
-            </View>
-          </Row>
-          <HowTo open={guide === 'height'} onToggle={() => setGuide(guide === 'height' ? null : 'height')} label={t('guide_height_title')} />
-        </FormRow>
-        {guide === 'height' && <MeasureGuide kind="height" />}
+            </FormRow>
+            {(guide === 'height' || wizard) && <MeasureGuide kind="height" />}
+          </>
+        )}
 
-        <FormRow icon="scale-bathroom" label={t('weight')} required>
-          <Row gap={8}>
-            <Input style={{ flex: 1 }} value={weight} onChangeText={setWeight} keyboardType="decimal-pad" placeholder="60" />
-            <View style={{ width: 96, minHeight: 50, borderRadius: 12, backgroundColor: c.cardAlt, alignItems: 'center', justifyContent: 'center' }}>
-              <Txt size="large">kg</Txt>
-            </View>
-          </Row>
-          <HowTo open={guide === 'weight'} onToggle={() => setGuide(guide === 'weight' ? null : 'weight')} label={t('guide_weight_title')} />
-        </FormRow>
-        {guide === 'weight' && <MeasureGuide kind="weight" />}
+        {show(4) && (
+          <>
+            <FormRow icon="scale-bathroom" label={t('weight')} required>
+              <Row gap={8}>
+                <Input
+                  style={{ flex: 1 }}
+                  value={weight}
+                  onChangeText={setWeight}
+                  keyboardType="decimal-pad"
+                  placeholder="60"
+                />
+                <View
+                  style={{
+                    width: 96,
+                    minHeight: 50,
+                    borderRadius: 12,
+                    backgroundColor: c.cardAlt,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Txt size="large">kg</Txt>
+                </View>
+              </Row>
+              <HowTo
+                open={guide === 'weight'}
+                onToggle={() => setGuide(guide === 'weight' ? null : 'weight')}
+                label={t('guide_weight_title')}
+              />
+            </FormRow>
+            {(guide === 'weight' || wizard) && <MeasureGuide kind="weight" />}
+          </>
+        )}
 
-        <FormRow icon="water-outline" label={t('blood_group')} required>
-          <Select<BloodGroup>
-            title={t('blood_group')}
-            value={blood}
-            onChange={setBlood}
-            placeholder={t('choose')}
-            options={BLOOD_GROUPS.map((b) => ({ value: b, label: b }))}
-          />
-        </FormRow>
+        {show(5) && (
+          <>
+            <FormRow icon="water-outline" label={t('blood_group')} required>
+              <Select<BloodGroup>
+                title={t('blood_group')}
+                value={blood}
+                onChange={setBlood}
+                placeholder={t('choose')}
+                options={BLOOD_GROUPS.map((b) => ({ value: b, label: b }))}
+              />
+            </FormRow>
+          </>
+        )}
 
-        <FormRow icon="target" label={t('target_weight')} required>
-          <Row gap={8}>
-            <Input style={{ flex: 1 }} value={target} onChangeText={setTarget} keyboardType="decimal-pad" placeholder={weight || '55'} />
-            <View style={{ width: 130 }}>
-              <Select<string> title={t('reach_in')} value={targetDate} onChange={setTargetDate} options={dateOptions} />
-            </View>
-          </Row>
-        </FormRow>
+        {wizard && step === 6 && (
+          <View style={{ alignItems: 'center', gap: 12, paddingVertical: 8 }}>
+            {avatar}
+            <Txt muted center>
+              {t('photo_optional')}
+            </Txt>
+            <Row gap={10} style={{ alignSelf: 'stretch' }}>
+              <View style={{ flex: 1 }}>
+                <GradientButton
+                  title={t('camera')}
+                  icon="camera"
+                  colors={[BRAND.blueLight, BRAND.blue]}
+                  onPress={async () => setPhoto((await choosePhoto('camera', t)) ?? photo)}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <GradientButton
+                  title={t('gallery')}
+                  icon="image"
+                  colors={[BRAND.greenLight, BRAND.green]}
+                  onPress={async () => setPhoto((await choosePhoto('gallery', t)) ?? photo)}
+                />
+              </View>
+            </Row>
+            <Txt muted size="small" center>
+              🔒 {t('photo_private_note')}
+            </Txt>
+          </View>
+        )}
+        {show(7) && (
+          <>
+            <FormRow icon="target" label={t('target_weight')} required>
+              <Row gap={8}>
+                <Input
+                  style={{ flex: 1 }}
+                  value={target}
+                  onChangeText={setTarget}
+                  keyboardType="decimal-pad"
+                  placeholder={weight || '55'}
+                />
+                <View style={{ width: 130 }}>
+                  <Select<string>
+                    title={t('reach_in')}
+                    value={targetDate}
+                    onChange={setTargetDate}
+                    options={dateOptions}
+                  />
+                </View>
+              </Row>
+            </FormRow>
+          </>
+        )}
 
-        <FormRow icon="stethoscope" label={t('health_issue_q')}>
-          <Input
-            value={issues}
-            onChangeText={setIssues}
-            placeholder={t('health_issue_placeholder')}
-            multiline
-            style={{ minHeight: 90, textAlignVertical: 'top', paddingTop: 12 }}
-          />
-          <Txt muted size="small" style={{ marginTop: 4 }}>
-            🔒 {t('health_issue_private')}
-          </Txt>
-        </FormRow>
+        {show(7) && (
+          <>
+            <FormRow icon="stethoscope" label={t('health_issue_q')}>
+              <Input
+                value={issues}
+                onChangeText={setIssues}
+                placeholder={t('health_issue_placeholder')}
+                multiline
+                style={{ minHeight: 90, textAlignVertical: 'top', paddingTop: 12 }}
+              />
+              <Txt muted size="small" style={{ marginTop: 4 }}>
+                🔒 {t('health_issue_private')}
+              </Txt>
+            </FormRow>
+          </>
+        )}
       </Card>
 
-      <GradientButton title={submitLabel} icon="calculator-variant" colors={[BRAND.greenLight, BRAND.green]} onPress={submit} />
+      {wizard && step === 6 && <MeasureGuide kind="photo" />}
+
+      {wizard ? (
+        <Row gap={10}>
+          {step > 0 && (
+            <View style={{ flex: 1 }}>
+              <Button variant="outline" icon="arrow-left" title={t('back')} onPress={() => setStep(step - 1)} />
+            </View>
+          )}
+          <View style={{ flex: 2 }}>
+            {last ? (
+              <GradientButton
+                title={submitLabel}
+                icon="calculator-variant"
+                colors={[BRAND.greenLight, BRAND.green]}
+                onPress={submit}
+              />
+            ) : (
+              <Button
+                icon="arrow-right"
+                title={step === 6 && !photo ? t('skip') : t('next')}
+                disabled={!stepValid[step]}
+                onPress={() => setStep(step + 1)}
+              />
+            )}
+          </View>
+        </Row>
+      ) : (
+        <GradientButton
+          title={submitLabel}
+          icon="calculator-variant"
+          colors={[BRAND.greenLight, BRAND.green]}
+          onPress={submit}
+        />
+      )}
     </View>
   );
 }

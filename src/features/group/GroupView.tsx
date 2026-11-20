@@ -28,6 +28,7 @@ import {
   type JoinRequest,
   type SummaryRow,
 } from './api';
+import { AddMemberCard } from './AddMember';
 import { CategoryPicker } from './NoGroup';
 
 const MEDALS = ['🥇', '🥈', '🥉'];
@@ -203,6 +204,8 @@ export function GroupView({
           ))}
         </Card>
       )}
+
+      {isAdmin && <AddMemberCard group={group} refreshKey={refreshKey} />}
 
       {error && (
         <Card style={{ borderColor: c.danger }}>

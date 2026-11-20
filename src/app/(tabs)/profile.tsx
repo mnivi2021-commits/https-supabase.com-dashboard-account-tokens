@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
-import { Alert, View } from 'react-native';
+import { Alert, Switch, View } from 'react-native';
 
+import { canUseAppLock } from '@/components/AppLock';
 import { LanguagePicker } from '@/components/LanguagePicker';
 import { Avatar } from '@/components/pickers';
 import { Button, Card, Icon, ListItem, Row, Screen, SectionTitle, Segmented, Txt } from '@/components/ui';
@@ -13,7 +14,7 @@ import { BMI_COLORS, bmiCategory, calcBmi, cmToFeetInches } from '@/lib/health';
 import { useSettings, type ThemeMode } from '@/theme/settings';
 
 export default function ProfileTab() {
-  const { t, colors: c, themeMode, setThemeMode, setAppMode } = useSettings();
+  const { t, colors: c, themeMode, setThemeMode, setAppMode, appLock, setAppLock } = useSettings();
   const { profile, syncing, pendingCount, lastSync, syncNow, clearLocal } = useData();
   const { email, guest, signOut, isAnonymous } = useAuth();
   if (!profile) return null;
@@ -102,6 +103,25 @@ export default function ProfileTab() {
           <Icon name="translate" /> {t('language')}
         </SectionTitle>
         <LanguagePicker />
+        <View style={{ height: 16 }} />
+        <Row style={{ justifyContent: 'space-between' }}>
+          <View style={{ flex: 1 }}>
+            <Txt bold>🔒 {t('app_lock')}</Txt>
+            <Txt muted size="small">{t('app_lock_sub')}</Txt>
+          </View>
+          <Switch
+            value={appLock}
+            accessibilityLabel={t('app_lock')}
+            trackColor={{ true: c.primary }}
+            onValueChange={async (on) => {
+              if (on && !(await canUseAppLock())) {
+                Alert.alert(t('app_lock'), t('app_lock_unavailable'));
+                return;
+              }
+              setAppLock(on);
+            }}
+          />
+        </Row>
       </Card>
 
       <Card>

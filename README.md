@@ -120,6 +120,26 @@ After changing `.env`, restart with `npx expo start -c` to clear the cache.
 
 ---
 
+## More features (added after the first version)
+
+- **Mobile number login (OTP)** — country code picker (+91 default), 10-digit check, 6-digit OTP with SMS autofill, resend after 30 s. Needs an SMS provider (see below); until then the app uses **Start** (no email).
+- **Add group member by mobile number** — admin enters name + number (or picks from phone contacts) → WhatsApp opens with an invite (download link, the number to log in with, join code, invite link). Status *Invited → Joined*; when that person logs in with the same number they join automatically.
+- **Invite links work before login** — the code is kept and the Group screen opens with it after setup.
+- **App lock** — Profile → App lock asks for the phone PIN / fingerprint when the app opens.
+- **Group Access** — invited (private, max 5, admin approval) or **open** groups (anyone can join, max 50, limited data only); member codes, per-group *Shared Data* switch; **group targets** (steps / workout minutes / calories / weight loss) with 🥇 Gold 100 / 🥈 Silver 50 / ⭐ 10 points; a **Jitsi** video meeting room per group; **Q&A** board and an admin-set **help line**.
+- **Food & calories**, **Nutrition & Wellness Plan**, **Workout Report**, **Daily Motivation**, animated how-to-measure guides, step-by-step setup wizard.
+
+### Switch on mobile number login (SMS)
+
+1. Create an account with an SMS provider supported by Supabase — e.g. **MSG91** (India) or **Twilio**. Each SMS costs about ₹0.15–0.25.
+2. Supabase → **Authentication → Sign In / Providers → Phone** → enable it, choose the provider and paste its keys.
+3. Free testing: on the same page add **test phone numbers with fixed OTPs** (for example `919876543210=123456`) — no SMS is sent and nothing is charged.
+4. Nothing to change in the app: the *Login with mobile number* card starts working.
+
+### Download link in WhatsApp invites
+
+Set `EXPO_PUBLIC_DOWNLOAD_URL` in `.env` (default: Expo Go). Change it to your EAS APK link while testing, and to the Play Store link after launch — see `src/config/app.ts`.
+
 ## Expo Go notes and limitations
 
 | Feature | In Expo Go |

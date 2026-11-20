@@ -59,6 +59,11 @@ npx expo export --platform android --output-dir <temp dir>   # full bundle check
 - **Notifications**: local only (`src/lib/notifications.ts`). `scheduleReminders` cancels all, then reschedules from
   `reminders`. Weekday convention is 1 = Sunday (expo-notifications).
 
+- **Phone login / invites**: `components/PhoneLogin.tsx` uses `signInWithOtp({ phone })` + `verifyOtp({ type: 'sms' })` — needs an SMS provider in Supabase. Admins add members by number (`group_invites`, `add_group_invite`); `claim_my_invites()` (called after login and on the Group screen) joins groups that invited the user's phone. The download link lives in `src/config/app.ts` (`EXPO_PUBLIC_DOWNLOAD_URL`).
+- **App lock**: `settings.appLock` + `components/AppLock.tsx` (expo-local-authentication, device PIN fallback).
+- **Setup wizard**: `ProfileForm` with `wizard` = one question per step (onboarding); without it = one-page form (edit profile).
+- **Shell editing gotcha**: when scripting edits, write the script to a file — inline `node -e` strings lose backticks and `$` in bash.
+
 ## Conventions
 
 - **i18n**: every user-facing string goes through `t('key')` from `useSettings()` / `useT()`. `src/i18n/en.ts` defines

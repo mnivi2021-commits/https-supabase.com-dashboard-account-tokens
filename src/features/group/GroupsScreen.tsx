@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { RefreshControl } from 'react-native';
+import { Alert, RefreshControl } from 'react-native';
 
 import { AppHeader } from '@/components/AppHeader';
 import { Button, Card, Icon, Loading, Row, Screen, Txt } from '@/components/ui';
@@ -9,7 +9,7 @@ import { useAuth } from '@/data/auth';
 import { useData } from '@/data/store';
 import { isSupabaseConfigured } from '@/lib/env';
 import { useSettings } from '@/theme/settings';
-import { fetchMyRequests, myGroups, type MyGroup, type MyRequest } from './api';
+import { claimMyInvites, fetchMyRequests, myGroups, type MyGroup, type MyRequest } from './api';
 import { AccessButton, CreatePanel, FindPanel, JoinPanel, MyGroupsList, PendingRequests, type AccessMode } from './GroupAccess';
 import { GroupDetail } from './GroupDetail';
 
@@ -45,6 +45,9 @@ export function GroupsScreen({
     if (!userId || !isSupabaseConfigured) return;
     try {
       setError(null);
+      // Joined automatically if an admin added my mobile number (phone login).
+      const joined = await claimMyInvites().catch(() => [] as string[]);
+      if (joined.length) Alert.alert(t('joined_group_banner'), joined.join(', '));
       const [g, r] = await Promise.all([myGroups(), fetchMyRequests().catch(() => [])]);
       setGroups(g);
       setRequests(r);
@@ -52,6 +55,7 @@ export function GroupsScreen({
       setError(String((e as Error).message ?? e));
       setGroups((g) => g ?? []);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
   useEffect(() => {

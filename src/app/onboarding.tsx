@@ -48,6 +48,7 @@ export default function Onboarding() {
             <AppHeader onBack={() => void signOut()} showBell={false} />
             <LanguagePicker />
             <ProfileForm
+              wizard
               submitLabel={t('calculate_bmi')}
               onSubmit={(d, changed) => {
                 setDraft(d);

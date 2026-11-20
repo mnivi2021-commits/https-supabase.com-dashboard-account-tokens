@@ -2,6 +2,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { AppLock } from '@/components/AppLock';
 import { Loading } from '@/components/ui';
 import { AuthProvider, useAuth } from '@/data/auth';
 import { StepTracker } from '@/data/steps';
@@ -16,7 +17,9 @@ export default function RootLayout() {
         <AuthProvider>
           <DataProvider>
             <StepTracker>
-              <Gate />
+              <AppLock>
+                <Gate />
+              </AppLock>
             </StepTracker>
           </DataProvider>
         </AuthProvider>
@@ -68,14 +71,16 @@ function Gate() {
           <Stack.Screen name="walk" options={{ title: t('live_walk') }} />
           <Stack.Screen name="workout-report" options={{ headerShown: false }} />
           <Stack.Screen name="nutrition" options={{ headerShown: false }} />
+          <Stack.Screen name="motivation" options={{ headerShown: false }} />
           <Stack.Screen name="weight" options={{ title: t('update_weight') }} />
           <Stack.Screen name="edit-profile" options={{ headerShown: false }} />
           <Stack.Screen name="targets" options={{ title: t('targets') }} />
           <Stack.Screen name="reminders" options={{ title: t('reminders') }} />
           <Stack.Screen name="privacy" options={{ title: t('privacy') }} />
-          <Stack.Screen name="join" options={{ headerShown: false }} />
         </Stack.Protected>
         <Stack.Screen name="auth-callback" options={{ headerShown: false }} />
+        {/* Invite links work before login too (the code is kept until the user is set up). */}
+        <Stack.Screen name="join" options={{ headerShown: false }} />
       </Stack>
     </>
   );

@@ -403,6 +403,13 @@ begin
   if (select count(*) from group_members where group_id = g.id) >= public.group_limit_for(g.kind) then
     raise exception 'GROUP_FULL';
   end if;
+  -- Admin already invited this mobile number: join straight away.
+  if exists (select 1 from group_invites i where i.group_id = g.id and i.status = 'invited' and i.phone = public.my_phone()) then
+    insert into group_members (group_id, user_id, category)
+    values (g.id, auth.uid(), case when p_category = 'gain' then 'gain' else 'loss' end);
+    update group_invites set status = 'joined', joined_at = now() where group_id = g.id and phone = public.my_phone();
+    return 'JOINED:' || g.name;
+  end if;
   if g.kind = 'open' then
     insert into group_members (group_id, user_id, category)
     values (g.id, auth.uid(), case when p_category = 'gain' then 'gain' else 'loss' end);
@@ -1092,6 +1099,111 @@ grant execute on function
   public.set_group_target(uuid, text, numeric, date, date, boolean, boolean, boolean),
   public.delete_group_target(uuid), public.get_group_targets(uuid, date),
   public.get_target_board(uuid, date), public.get_group_points(uuid, date)
+to authenticated;
+
+-- =====================================================================
+-- Add member by mobile number → WhatsApp invite → auto-join on login
+-- =====================================================================
+
+create table if not exists public.group_invites (
+  id         uuid primary key default gen_random_uuid(),
+  group_id   uuid not null references public.groups (id) on delete cascade,
+  name       text not null default '',
+  phone      text not null check (phone ~ '^[0-9]{11,15}$'),  -- digits with country code, e.g. 919876543210
+  status     text not null default 'invited' check (status in ('invited', 'joined')),
+  invited_by uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  joined_at  timestamptz,
+  unique (group_id, phone)
+);
+alter table public.group_invites enable row level security;  -- no policies: functions only
+
+-- "+91 98765 43210" / "9876543210" → "919876543210" (10 digits get India's 91).
+create or replace function public.normalize_phone(p text)
+returns text language sql immutable as $$
+  select case
+    when length(d) = 10 then '91' || d
+    when length(d) = 12 and left(d, 2) = '91' then d
+    when length(d) between 11 and 15 then d
+    else null end
+  from (select ltrim(regexp_replace(coalesce(p, ''), '[^0-9]', '', 'g'), '0') as d) x;
+$$;
+
+-- The signed-in user's phone (set by phone OTP login), normalised.
+create or replace function public.my_phone()
+returns text language sql stable security definer set search_path = public, auth as $$
+  select public.normalize_phone(u.phone) from auth.users u where u.id = auth.uid();
+$$;
+revoke execute on function public.my_phone() from public, anon, authenticated;
+
+-- Admin adds a member by name + mobile number (pending invites count towards the size limit).
+create or replace function public.add_group_invite(p_group_id uuid, p_name text, p_phone text)
+returns uuid language plpgsql security definer set search_path = public as $$
+declare v_phone text := public.normalize_phone(p_phone); v_kind text; v_id uuid;
+begin
+  if not public.is_group_admin(p_group_id) then raise exception 'NOT_ADMIN'; end if;
+  if v_phone is null then raise exception 'INVALID_PHONE'; end if;
+  select kind into v_kind from groups where id = p_group_id;
+  if (select count(*) from group_members where group_id = p_group_id)
+     + (select count(*) from group_invites where group_id = p_group_id and status = 'invited' and phone <> v_phone)
+     >= public.group_limit_for(v_kind) then
+    raise exception 'GROUP_FULL';
+  end if;
+  insert into group_invites (group_id, name, phone)
+  values (p_group_id, left(trim(coalesce(p_name, '')), 40), v_phone)
+  on conflict (group_id, phone) do update set name = excluded.name, created_at = now()
+  returning id into v_id;
+  return v_id;
+end $$;
+
+create or replace function public.list_group_invites(p_group_id uuid)
+returns table (id uuid, name text, phone text, status text, created_at timestamptz)
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.is_group_admin(p_group_id) then raise exception 'NOT_ADMIN'; end if;
+  return query
+    select i.id, i.name, i.phone, i.status, i.created_at from group_invites i
+    where i.group_id = p_group_id order by i.status, i.created_at desc;
+end $$;
+
+create or replace function public.delete_group_invite(p_invite uuid)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not exists (select 1 from group_invites i where i.id = p_invite and public.is_group_admin(i.group_id)) then
+    raise exception 'NOT_ADMIN';
+  end if;
+  delete from group_invites where id = p_invite;
+end $$;
+
+-- After login: join every group that invited my mobile number. Returns the group names joined.
+create or replace function public.claim_my_invites()
+returns setof text language plpgsql security definer set search_path = public as $$
+declare v_phone text := public.my_phone(); r record;
+begin
+  if auth.uid() is null or v_phone is null then return; end if;
+  for r in
+    select i.id, i.group_id, g.name from group_invites i join groups g on g.id = i.group_id
+    where i.phone = v_phone and i.status = 'invited'
+  loop
+    begin
+      insert into group_members (group_id, user_id) values (r.group_id, auth.uid()) on conflict do nothing;
+      update group_invites set status = 'joined', joined_at = now() where id = r.id;
+      delete from group_join_requests where group_id = r.group_id and user_id = auth.uid();
+      return next r.name;
+    exception when others then
+      -- group full or similar: leave the invite pending
+      null;
+    end;
+  end loop;
+end $$;
+
+revoke execute on function
+  public.add_group_invite(uuid, text, text), public.list_group_invites(uuid),
+  public.delete_group_invite(uuid), public.claim_my_invites()
+from anon, public;
+grant execute on function
+  public.add_group_invite(uuid, text, text), public.list_group_invites(uuid),
+  public.delete_group_invite(uuid), public.claim_my_invites()
 to authenticated;
 
 -- ---------------------------------------------------------------------

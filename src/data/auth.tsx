@@ -22,6 +22,9 @@ interface AuthValue {
   isAnonymous: boolean;
   /** Creates a cloud account without email or login link. */
   startAnonymous: () => Promise<void>;
+  /** Mobile login. `phone` in international form, e.g. +919876543210. */
+  sendPhoneOtp: (phone: string) => Promise<void>;
+  verifyPhoneOtp: (phone: string, code: string) => Promise<void>;
   sendOtp: (email: string) => Promise<void>;
   verifyOtp: (email: string, code: string) => Promise<void>;
   signInWithGoogle: () => Promise<boolean>;
@@ -71,6 +74,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // that reopens the app at /auth-callback?code=… on this phone.
       options: { shouldCreateUser: true, emailRedirectTo: Linking.createURL('auth-callback') },
     });
+    if (error) throw error;
+  }, []);
+
+  const sendPhoneOtp = useCallback(async (phone: string) => {
+    const { error } = await supabase.auth.signInWithOtp({ phone, options: { shouldCreateUser: true } });
+    if (error) throw error;
+  }, []);
+
+  const verifyPhoneOtp = useCallback(async (phone: string, code: string) => {
+    const { error } = await supabase.auth.verifyOtp({ phone, token: code.trim(), type: 'sms' });
     if (error) throw error;
   }, []);
 
@@ -134,13 +147,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       guest,
       isAnonymous: !!session?.user.is_anonymous,
       startAnonymous,
+      sendPhoneOtp,
+      verifyPhoneOtp,
       sendOtp,
       verifyOtp,
       signInWithGoogle,
       continueAsGuest,
       signOut,
     }),
-    [loading, session, guest, startAnonymous, sendOtp, verifyOtp, signInWithGoogle, continueAsGuest, signOut],
+    [loading, session, guest, startAnonymous, sendPhoneOtp, verifyPhoneOtp, sendOtp, verifyOtp, signInWithGoogle, continueAsGuest, signOut],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

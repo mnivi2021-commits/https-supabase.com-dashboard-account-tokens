@@ -1,11 +1,15 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { router } from 'expo-router';
 import { Tabs } from 'expo-router/js-tabs';
+import { useEffect } from 'react';
 import { View } from 'react-native';
 
 import type { IconName } from '@/components/ui';
 import type { TKey } from '@/i18n';
 import { font } from '@/theme/colors';
 import { useSettings } from '@/theme/settings';
+import { PENDING_JOIN_KEY } from '@/config/app';
 
 const TABS: { name: string; title: TKey; icon: IconName }[] = [
   { name: 'index', title: 'tab_home', icon: 'home-heart' },
@@ -20,6 +24,17 @@ const BRANDED = new Set(['workout', 'group']);
 
 export default function TabsLayout() {
   const { colors: c, t } = useSettings();
+
+  // An invite link opened before login: continue it now.
+  useEffect(() => {
+    AsyncStorage.getItem(PENDING_JOIN_KEY)
+      .then(async (code) => {
+        if (!code) return;
+        await AsyncStorage.removeItem(PENDING_JOIN_KEY);
+        router.push({ pathname: '/group', params: { code } });
+      })
+      .catch(() => {});
+  }, []);
   return (
     <Tabs
       screenOptions={{

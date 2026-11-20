@@ -16,6 +16,7 @@ import { todayKey } from '@/lib/dates';
 import { isSupabaseConfigured } from '@/lib/env';
 import { calcBmi, estimateCalories, waterToMl } from '@/lib/health';
 import { scheduleReminders } from '@/lib/notifications';
+import { supabase } from '@/lib/supabase';
 import {
   DEFAULT_SHARE,
   DEFAULT_TARGETS,
@@ -305,6 +306,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
             setState(merged);
             persistState();
             setLastSync(new Date().toISOString());
+            // Group invites sent to my mobile number (phone login): join them now.
+            void supabase.rpc('claim_my_invites').then(() => {}, () => {});
           } catch (e) {
             console.warn('[data] pull failed (offline?)', e);
           } finally {

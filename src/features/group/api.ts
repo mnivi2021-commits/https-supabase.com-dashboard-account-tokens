@@ -322,3 +322,24 @@ export function rewardFor(rank: number | null, t: Pick<GroupTarget, 'gold' | 'si
   if (rank >= 4 && t.points) return { kind: 'points', pts: 10 };
   return { kind: null, pts: 0 };
 }
+
+// ---------- Add member by mobile number ----------
+export interface GroupInvite {
+  id: string;
+  name: string;
+  phone: string; // digits with country code, e.g. 919876543210
+  status: 'invited' | 'joined';
+  created_at: string;
+}
+export const addGroupInvite = (groupId: string, name: string, phone: string) =>
+  rpc<string>('add_group_invite', { p_group_id: groupId, p_name: name, p_phone: phone });
+export const listGroupInvites = (groupId: string) => rpc<GroupInvite[]>('list_group_invites', { p_group_id: groupId });
+export const deleteGroupInvite = (inviteId: string) => rpc<void>('delete_group_invite', { p_invite: inviteId });
+/** Joins every group that invited my (phone-login) number. Returns the group names joined. */
+export const claimMyInvites = () => rpc<string[]>('claim_my_invites');
+
+/** "919876543210" → "+91 98765 43210" */
+export function formatPhone(digits: string): string {
+  if (digits.length === 12 && digits.startsWith('91')) return `+91 ${digits.slice(2, 7)} ${digits.slice(7)}`;
+  return `+${digits}`;
+}

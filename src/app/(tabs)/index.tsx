@@ -118,6 +118,14 @@ export default function Home() {
           <Icon name="lightbulb-on-outline" color={c.secondary} size={28} />
           <Txt style={{ flex: 1 }}>{motivation}</Txt>
         </Row>
+        <Button
+          style={{ marginTop: 10 }}
+          small
+          variant="secondary"
+          icon="arm-flex"
+          title={t('todays_fitness_push')}
+          onPress={() => router.push('/motivation')}
+        />
       </Card>
 
       <ShareCodeCard compact />

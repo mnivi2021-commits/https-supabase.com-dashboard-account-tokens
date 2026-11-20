@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, Text, useWindowDimensions, View } from 'react-native';
 
 import { LanguagePicker } from '@/components/LanguagePicker';
+import { PhoneLogin } from '@/components/PhoneLogin';
 import { Button, Card, Field, Icon, Row, Screen, Txt, type IconName } from '@/components/ui';
 import { BottomArt, BRAND, GradientButton, Logo, ReportClipboard, ReportPill, Wordmark } from '@/components/WelcomeArt';
 import { useAuth } from '@/data/auth';
@@ -139,6 +140,14 @@ export default function Login() {
         {stage === 'me' && (
           <>
             {backBar(t('my_login'), 'heart-pulse')}
+            {isSupabaseConfigured && <PhoneLogin />}
+            {isSupabaseConfigured && (
+              <Row gap={10}>
+                <View style={{ flex: 1, height: 1, backgroundColor: c.border }} />
+                <Txt muted>{t('or_start_without_number')}</Txt>
+                <View style={{ flex: 1, height: 1, backgroundColor: c.border }} />
+              </Row>
+            )}
             <Card>
               <Button
                 icon="play-circle"
