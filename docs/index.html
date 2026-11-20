@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Health Track</title>
+  <meta name="description" content="Health Track — your daily health report for you and your family: BMI, food, water, workouts, sleep and group challenges." />
+  <meta property="og:title" content="Health Track" />
+  <meta property="og:description" content="Track together • Share • Support. BMI, food, water, workouts, sleep and family group challenges." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 90'%3E%3Cpath d='M50 84 C 22 62 6 46 11 26 C 16 9 39 6 50 23' stroke='%231565C0' stroke-width='9' fill='none' stroke-linecap='round'/%3E%3Cpath d='M50 23 C 61 6 84 9 89 26 C 94 46 78 62 50 84' stroke='%2343B649' stroke-width='9' fill='none' stroke-linecap='round'/%3E%3C/svg%3E" />
+  <style>
+    :root {
+      --blue: #1565c0; --blue-light: #1e88e5; --green: #2e9e3e; --green-light: #43b649;
+      --navy: #12306b; --orange: #f57c00; --bg: #f1f8f5; --card: #ffffff; --text: #0f241b; --muted: #56695f; --border: #d6e6de;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #0a1511; --card: #13211b; --text: #e7f3ed; --muted: #9bb2a7; --border: #253a31; --navy: #e7f3ed; }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Noto Sans Tamil", "Noto Sans Devanagari", sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; }
+    a { color: inherit; }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 0 16px; }
+    header { padding: 28px 0 8px; text-align: center; }
+    .brand { display: inline-flex; flex-direction: column; align-items: center; gap: 4px; }
+    .word { font-size: 44px; font-weight: 800; font-style: italic; letter-spacing: -0.5px; margin: 0; }
+    .word .h { color: var(--navy); } .word .t { color: var(--green); }
+    .tag { color: var(--muted); font-size: 18px; margin: 4px 0 0; }
+    .hero { display: grid; gap: 24px; grid-template-columns: 1.2fr 1fr; align-items: center; padding: 24px 0; }
+    .hero h2 { font-size: 34px; line-height: 1.15; margin: 0 0 8px; color: var(--navy); text-transform: uppercase; }
+    .hero h2 span { color: var(--green); font-style: italic; display: block; }
+    .hero p { font-size: 18px; color: var(--muted); }
+    .btns { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 18px; }
+    .btn { display: inline-flex; align-items: center; gap: 10px; min-height: 56px; padding: 0 22px; border-radius: 16px; font-weight: 800; font-size: 18px; text-decoration: none; color: #fff; border: 0; cursor: pointer; }
+    .btn.blue { background: linear-gradient(135deg, var(--blue-light), var(--blue)); }
+    .btn.green { background: linear-gradient(135deg, var(--green-light), var(--green)); }
+    .btn[aria-disabled="true"] { opacity: .55; pointer-events: none; }
+    .note { font-size: 14px; color: var(--muted); margin-top: 8px; }
+    .phone { background: var(--card); border: 1px solid var(--border); border-radius: 36px; padding: 18px; box-shadow: 0 18px 40px rgba(18, 48, 107, .12); max-width: 340px; justify-self: center; width: 100%; }
+    .tile { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 16px; margin-bottom: 10px; color: #fff; font-weight: 700; }
+    .tile.b { background: linear-gradient(135deg, var(--blue-light), var(--blue)); }
+    .tile.g { background: linear-gradient(135deg, var(--green-light), var(--green)); }
+    .ring { width: 120px; height: 120px; margin: 6px auto 12px; display: block; }
+    h3.section { font-size: 26px; color: var(--navy); text-align: center; margin: 36px 0 16px; }
+    .grid { display: grid; gap: 14px; grid-template-columns: repeat(3, 1fr); }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 18px; }
+    .card .ic { font-size: 30px; }
+    .card h4 { margin: 6px 0 4px; font-size: 18px; }
+    .card p { margin: 0; color: var(--muted); font-size: 15px; }
+    ol.steps { max-width: 640px; margin: 0 auto; padding-left: 22px; font-size: 17px; }
+    ol.steps li { margin-bottom: 8px; }
+    footer { text-align: center; color: var(--muted); padding: 36px 0 48px; font-size: 14px; }
+    .wave { height: 90px; display: block; width: 100%; margin-top: 30px; }
+    @media (max-width: 760px) {
+      .hero { grid-template-columns: 1fr; text-align: center; }
+      .btns { justify-content: center; }
+      .grid { grid-template-columns: 1fr 1fr; }
+      .word { font-size: 38px; }
+      .hero h2 { font-size: 28px; }
+    }
+    @media (max-width: 420px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header class="wrap">
+    <div class="brand">
+      <svg width="120" height="108" viewBox="0 0 100 90" aria-hidden="true">
+        <path d="M2 64 Q 22 52 44 57" stroke="#F57C00" stroke-width="3" fill="none" stroke-linecap="round" />
+        <path d="M50 84 C 22 62 6 46 11 26 C 16 9 39 6 50 23" stroke="#1565C0" stroke-width="7" fill="none" stroke-linecap="round" />
+        <path d="M50 23 C 61 6 84 9 89 26 C 94 46 78 62 50 84" stroke="#43B649" stroke-width="7" fill="none" stroke-linecap="round" />
+        <rect x="27" y="20" width="6" height="20" rx="1.5" fill="#43B649" />
+        <rect x="20" y="27" width="20" height="6" rx="1.5" fill="#43B649" />
+        <circle cx="60" cy="34" r="6" fill="#1565C0" />
+        <path d="M40 46 Q 50 66 62 62 Q 74 56 80 30" stroke="#2E9E3E" stroke-width="7" fill="none" stroke-linecap="round" />
+      </svg>
+      <h1 class="word"><span class="h">Health</span> <span class="t">Track</span></h1>
+      <svg width="220" height="16" viewBox="0 0 220 16" aria-hidden="true"><path d="M20 10 Q 120 0 210 8" stroke="#2E9E3E" stroke-width="4" fill="none" stroke-linecap="round" /></svg>
+      <p class="tag">Track Together • Share • Support</p>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="hero">
+      <div>
+        <h2>Welcome to your day<span>Health Care Track</span></h2>
+        <p>Your daily health report — BMI, food, water, workouts, steps and sleep — for you and your family, in English, தமிழ் and हिन्दी.</p>
+        <div class="btns">
+          <a id="download" class="btn green" href="health-track.apk" aria-disabled="true">
+            <span aria-hidden="true">⬇️</span> <span id="download-label">Android app — coming soon</span>
+          </a>
+          <a class="btn blue" href="#join"><span aria-hidden="true">👨‍👩‍👧</span> Join a family group</a>
+        </div>
+        <p class="note" id="download-note">The Android app download will appear here very soon.</p>
+      </div>
+      <div class="phone" aria-hidden="true">
+        <svg class="ring" viewBox="0 0 120 120">
+          <circle cx="60" cy="60" r="50" stroke="#DCFCE7" stroke-width="14" fill="none" />
+          <circle cx="60" cy="60" r="50" stroke="#43B649" stroke-width="14" fill="none" stroke-linecap="round" stroke-dasharray="314" stroke-dashoffset="88" transform="rotate(-90 60 60)" />
+          <text x="60" y="58" text-anchor="middle" font-size="24" font-weight="800" fill="currentColor">72%</text>
+          <text x="60" y="78" text-anchor="middle" font-size="11" fill="currentColor" opacity=".7">today's targets</text>
+        </svg>
+        <div class="tile b">👤 My Login</div>
+        <div class="tile g">👥 Group Login</div>
+        <div class="tile b" style="background:linear-gradient(135deg,#FB923C,#EA580C)">🍽️ Food 1,250 / 1,900 kcal</div>
+        <div class="tile g">💧 Water 1,200 / 2,000 ml</div>
+      </div>
+    </section>
+
+    <h3 class="section">Everything for a healthier family</h3>
+    <div class="grid">
+      <div class="card"><div class="ic">📊</div><h4>BMI Report</h4><p>Asian / Indian BMI ranges, ideal weight, calories and water you need, with simple guidance.</p></div>
+      <div class="card"><div class="ic">🍽️</div><h4>Food & Nutrition</h4><p>Indian food list with calories and protein, a daily meal plan and a nutrition guide.</p></div>
+      <div class="card"><div class="ic">🏃</div><h4>Workouts & Steps</h4><p>13 workouts, automatic step counting, calories burned and weekly reports.</p></div>
+      <div class="card"><div class="ic">😴</div><h4>Sleep & Water</h4><p>Sleep hours and quality, water in ml, reminders that ring at your time.</p></div>
+      <div class="card"><div class="ic">👨‍👩‍👧‍👦</div><h4>Family Groups</h4><p>Up to 5 family members: see each other's day, cheer, and win the monthly challenge.</p></div>
+      <div class="card"><div class="ic">🏆</div><h4>Targets & Rewards</h4><p>Set a group goal, climb the leaderboard and earn gold, silver and points together.</p></div>
+    </div>
+
+    <h3 class="section" id="join">Join your family group</h3>
+    <ol class="steps">
+      <li>Download the <b>Health Track</b> app (button above).</li>
+      <li>Open it and choose <b>My Login</b>. Log in with the mobile number your family added, or tap <b>Start</b>.</li>
+      <li>Fill in your profile (name, age, height, weight …).</li>
+      <li>Open the <b>Group</b> tab → <b>Join Invited Group</b> → enter the 6-digit code from your WhatsApp invite.</li>
+    </ol>
+  </main>
+
+  <svg class="wave" viewBox="0 0 1000 90" preserveAspectRatio="none" aria-hidden="true">
+    <defs><linearGradient id="w" x1="0" x2="1"><stop offset="0" stop-color="#1565C0" /><stop offset="1" stop-color="#43B649" /></linearGradient></defs>
+    <path d="M0 50 Q 250 10 500 45 T 1000 35 V90 H0 Z" fill="url(#w)" />
+  </svg>
+  <footer>
+    <div>❤️ Health Track — general guidance only; consult a doctor for medical advice.</div>
+  </footer>
+
+  <script>
+    // Turn the download button on as soon as the Android app file is published next to this page.
+    fetch('health-track.apk', { method: 'HEAD' })
+      .then(function (r) {
+        if (!r.ok) return;
+        var a = document.getElementById('download');
+        a.removeAttribute('aria-disabled');
+        document.getElementById('download-label').textContent = 'Download for Android';
+        document.getElementById('download-note').textContent = 'After downloading, open the file and allow "Install unknown apps" if your phone asks.';
+      })
+      .catch(function () {});
+  </script>
+</body>
+</html>

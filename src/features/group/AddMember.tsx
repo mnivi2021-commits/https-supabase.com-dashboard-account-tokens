@@ -6,7 +6,7 @@ import { Alert, Pressable, Share, TextInput, View } from 'react-native';
 
 import { Button, Card, Icon, Row, SectionTitle, Txt } from '@/components/ui';
 import { BRAND } from '@/components/WelcomeArt';
-import { DEFAULT_COUNTRY_CODE, DOWNLOAD_URL } from '@/config/app';
+import { DEFAULT_COUNTRY_CODE, DOWNLOAD_URL, joinUrl } from '@/config/app';
 import { font } from '@/theme/colors';
 import { useSettings } from '@/theme/settings';
 import {
@@ -52,7 +52,7 @@ export function AddMemberCard({ group, refreshKey }: { group: MyGroup; refreshKe
       download: DOWNLOAD_URL,
       phone: formatPhone(digits),
       code: group.invite_code,
-      link: Linking.createURL('/join', { queryParams: { code: group.invite_code } }),
+      link: joinUrl(group.invite_code),
     });
 
   /** Opens WhatsApp chat with that number (falls back to the share sheet). */

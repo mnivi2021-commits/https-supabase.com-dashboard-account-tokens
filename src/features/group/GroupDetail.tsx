@@ -7,6 +7,7 @@ import { Alert, Pressable, Share, Switch, TextInput, View } from 'react-native';
 
 import { Button, Card, Icon, Row, SectionTitle, Txt, type IconName } from '@/components/ui';
 import { BRAND, GradientButton } from '@/components/WelcomeArt';
+import { joinUrl } from '@/config/app';
 import { useAuth } from '@/data/auth';
 import { font } from '@/theme/colors';
 import { useSettings } from '@/theme/settings';
@@ -58,7 +59,7 @@ export function GroupDetail({
 
   useEffect(() => setShare(group.my_share), [group.my_share]);
 
-  const inviteLink = Linking.createURL('/join', { queryParams: { code: group.invite_code } });
+  const inviteLink = joinUrl(group.invite_code);
   const inviteText = t('invite_message', { group: group.name, code: group.invite_code, link: inviteLink });
 
   const copyCode = async () => {
