@@ -1,19 +1,22 @@
+import { useState } from 'react';
 import { Alert, View } from 'react-native';
 
-import { Button, Icon, Row, Txt } from '@/components/ui';
+import { Button, Icon, Row, Segmented, Txt } from '@/components/ui';
 import { useAuth } from '@/data/auth';
 import { useData } from '@/data/store';
 import { GroupsScreen } from '@/features/group/GroupsScreen';
+import { SharedScreen } from '@/features/share/SharedScreen';
 import { useSettings } from '@/theme/settings';
 
-/** "Group Login" home: only the members' day reports for my groups. */
+/** "Group Login" home: people who shared their code with me, and my groups. */
 export default function GroupHome() {
   const { t, colors: c, setAppMode } = useSettings();
-  const { signOut } = useAuth();
+  const { signOut, isAnonymous } = useAuth();
   const { clearLocal } = useData();
+  const [view, setView] = useState<'shared' | 'groups'>('shared');
 
   const onSignOut = () =>
-    Alert.alert(t('sign_out'), t('sign_out_confirm'), [
+    Alert.alert(t('sign_out'), isAnonymous ? t('sign_out_anon_warn') : t('sign_out_confirm'), [
       { text: t('cancel'), style: 'cancel' },
       {
         text: t('sign_out'),
@@ -42,8 +45,20 @@ export default function GroupHome() {
         <Button style={{ flex: 1 }} small variant="outline" icon="arrow-left" title={t('my_health')} onPress={() => setAppMode('me')} />
         <Button style={{ flex: 1 }} small variant="ghost" icon="logout" title={t('sign_out')} onPress={onSignOut} />
       </Row>
+      <Segmented
+        options={[
+          { value: 'shared', label: t('shared_with_me') },
+          { value: 'groups', label: t('my_groups') },
+        ]}
+        value={view}
+        onChange={setView}
+      />
     </View>
   );
 
-  return <GroupsScreen compact header={header} edges={['top', 'left', 'right']} />;
+  return view === 'shared' ? (
+    <SharedScreen header={header} edges={['top', 'left', 'right']} />
+  ) : (
+    <GroupsScreen compact header={header} edges={['top', 'left', 'right']} />
+  );
 }

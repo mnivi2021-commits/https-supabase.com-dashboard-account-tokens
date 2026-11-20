@@ -360,8 +360,8 @@ export function GroupView({
   );
 }
 
-/** One member's day report: Today vs Yesterday. */
-function MemberCard({
+/** One person's day report: the chosen day vs the day before. Also used for share-code viewing. */
+export function MemberCard({
   dayLabel,
   prevLabel,
   today: r,
@@ -371,7 +371,11 @@ function MemberCard({
   canRemove,
   onCheer,
   onRemove,
+  showCheer = true,
+  removeLabel,
 }: {
+  showCheer?: boolean;
+  removeLabel?: string;
   dayLabel: string;
   prevLabel: string;
   today: DashboardRow;
@@ -379,7 +383,7 @@ function MemberCard({
   photo: string | null;
   mine: boolean;
   canRemove: boolean;
-  onCheer: () => void;
+  onCheer?: () => void;
   onRemove: () => void;
 }) {
   const { t, colors: c } = useSettings();
@@ -470,7 +474,7 @@ function MemberCard({
             )}
           </Row>
         </View>
-        {!mine && (
+        {!mine && showCheer && (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={t('cheer')}
@@ -530,7 +534,7 @@ function MemberCard({
         </Txt>
       )}
       {canRemove && (
-        <Button small variant="ghost" icon="account-remove" title={t('remove_member')} onPress={onRemove} style={{ marginTop: 6 }} />
+        <Button small variant="ghost" icon="account-remove" title={removeLabel ?? t('remove_member')} onPress={onRemove} style={{ marginTop: 6 }} />
       )}
     </Card>
   );

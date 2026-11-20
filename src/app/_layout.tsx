@@ -52,11 +52,12 @@ function Gate() {
         <Stack.Protected guard={!signedIn}>
           <Stack.Screen name="login" options={{ headerShown: false }} />
         </Stack.Protected>
-        <Stack.Protected guard={signedIn && !hasProfile}>
-          <Stack.Screen name="onboarding" options={{ headerShown: false }} />
-        </Stack.Protected>
-        <Stack.Protected guard={signedIn && hasProfile && groupMode}>
+        {/* Group Login only views other people's reports, so it needs no own profile. */}
+        <Stack.Protected guard={signedIn && groupMode}>
           <Stack.Screen name="group-home" options={{ headerShown: false }} />
+        </Stack.Protected>
+        <Stack.Protected guard={signedIn && !groupMode && !hasProfile}>
+          <Stack.Screen name="onboarding" options={{ headerShown: false }} />
         </Stack.Protected>
         <Stack.Protected guard={signedIn && hasProfile && !groupMode}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />

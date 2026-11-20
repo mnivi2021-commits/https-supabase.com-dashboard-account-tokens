@@ -48,6 +48,9 @@ npx expo export --platform android --output-dir <temp dir>   # full bundle check
   (member day reports only, needs a real session). Chosen on the login page; switchable from Profile / group-home.
 - **Water** is stored in **ml** (`water[date]`, `targets.water_ml`, `targets.glass_ml`). `migrate()` in store.tsx converts
   old glass counts; `water_logs` keeps a legacy `glasses` column.
+- **Login**: "Start" = `supabase.auth.signInAnonymously()` (enabled via `external_anonymous_users_enabled` in the setup script); email link / Google are optional. Anonymous accounts cannot be recovered after sign-out, so the UI warns.
+- **Share codes** (`src/features/share/`): `profiles.share_code` + `share_links(owner_id, viewer_id)`; RPCs `my_share_code`, `reset_share_code`, `add_share_code`, `get_shared_dashboard`, `my_viewers`, `remove_viewer`, `remove_shared`. Group Login = anonymous sign-in + code (no profile needed; Gate routes `appMode === 'group'` to group-home before onboarding). Per-person day data comes from internal `person_day()` (EXECUTE revoked from app roles), shared by groups and share codes.
+- **Grants**: newer Supabase projects need explicit table GRANTs; they are at the end of schema.sql and verified by the setup script.
 - **Login on the free Supabase plan** uses the emailed magic link → `/auth-callback?code=` → `exchangeCodeForSession`
   (the email template, and so a 6-digit code, needs custom SMTP).
   Business errors are raised as codes (`GROUP_FULL`, `INVALID_CODE`, …) and mapped to i18n keys in `groupErrorKey`.

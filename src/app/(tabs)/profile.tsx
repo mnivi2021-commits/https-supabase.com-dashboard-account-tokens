@@ -5,6 +5,7 @@ import { LanguagePicker } from '@/components/LanguagePicker';
 import { Avatar } from '@/components/pickers';
 import { Button, Card, Icon, ListItem, Row, Screen, SectionTitle, Segmented, Txt } from '@/components/ui';
 import { SyncRefresh } from '@/components/SyncRefresh';
+import { ShareCodeCard } from '@/features/share/ShareCodeCard';
 import { useAuth } from '@/data/auth';
 import { useData } from '@/data/store';
 import { isSupabaseConfigured } from '@/lib/env';
@@ -14,7 +15,7 @@ import { useSettings, type ThemeMode } from '@/theme/settings';
 export default function ProfileTab() {
   const { t, colors: c, themeMode, setThemeMode, setAppMode } = useSettings();
   const { profile, syncing, pendingCount, lastSync, syncNow, clearLocal } = useData();
-  const { email, guest, signOut } = useAuth();
+  const { email, guest, signOut, isAnonymous } = useAuth();
   if (!profile) return null;
   const p = profile;
   const bmi = calcBmi(p.weight_kg, p.height_cm);
@@ -25,7 +26,7 @@ export default function ProfileTab() {
   const onGuestSignIn = () => void signOut();
 
   const onSignOut = () =>
-    Alert.alert(t('sign_out'), t('sign_out_confirm'), [
+    Alert.alert(t('sign_out'), isAnonymous ? t('sign_out_anon_warn') : t('sign_out_confirm'), [
       { text: t('cancel'), style: 'cancel' },
       {
         text: t('sign_out'),
@@ -81,6 +82,8 @@ export default function ProfileTab() {
         )}
       </Card>
 
+      <ShareCodeCard />
+
       <Card>
         <SectionTitle>
           <Icon name="theme-light-dark" /> {t('appearance')}
@@ -109,7 +112,7 @@ export default function ProfileTab() {
           </Txt>
         ) : (
           <>
-            <Txt style={{ marginBottom: 6 }}>{email}</Txt>
+            <Txt style={{ marginBottom: 6 }}>{isAnonymous ? t('account_no_email') : email}</Txt>
             <Row gap={8} style={{ marginBottom: 10 }}>
               <Icon name={pendingCount ? 'cloud-off-outline' : 'cloud-check'} color={pendingCount ? c.warning : c.primary} />
               <Txt muted style={{ flex: 1 }}>

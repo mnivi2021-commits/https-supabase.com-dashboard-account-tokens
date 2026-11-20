@@ -1,30 +1,46 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, Pressable, View } from 'react-native';
 
 import { LanguagePicker } from '@/components/LanguagePicker';
 import { Button, Card, Field, Icon, Row, Screen, Txt } from '@/components/ui';
 import { useAuth } from '@/data/auth';
+import { addShareCode, cleanCode, emitSharedChanged, shareErrorKey } from '@/features/share/api';
 import { isSupabaseConfigured } from '@/lib/env';
 import { useSettings, type AppMode } from '@/theme/settings';
 
 export default function Login() {
   const { colors: c, t, appMode, setAppMode } = useSettings();
-  const { sendOtp, verifyOtp, signInWithGoogle, continueAsGuest } = useAuth();
+  const { startAnonymous, sendOtp, verifyOtp, signInWithGoogle, continueAsGuest } = useAuth();
+  const [showEmail, setShowEmail] = useState(false);
   const [email, setEmail] = useState('');
-  const [code, setCode] = useState('');
+  const [otp, setOtp] = useState('');
   const [step, setStep] = useState<'email' | 'code'>('email');
-  const [busy, setBusy] = useState<'otp' | 'verify' | 'google' | null>(null);
+  const [shareCode, setShareCode] = useState('');
+  const [viewerName, setViewerName] = useState('');
+  const [busy, setBusy] = useState<'start' | 'view' | 'otp' | 'verify' | 'google' | null>(null);
 
-  const run = async (kind: 'otp' | 'verify' | 'google', fn: () => Promise<unknown>) => {
+  const run = async (kind: NonNullable<typeof busy>, fn: () => Promise<unknown>) => {
     setBusy(kind);
     try {
       await fn();
     } catch (e) {
-      Alert.alert(t('error'), (e as Error).message ?? String(e));
+      const key = shareErrorKey(e);
+      Alert.alert(t('error'), key ? t(key) : ((e as Error).message ?? String(e)));
     } finally {
       setBusy(null);
     }
   };
+
+  /** Group Login: create a no-email account in the background, then add the code. */
+  const viewWithCode = () =>
+    run('view', async () => {
+      await AsyncStorage.setItem('ht:viewer-name', viewerName.trim()).catch(() => {});
+      await startAnonymous();
+      const owner = await addShareCode(shareCode, viewerName);
+      emitSharedChanged();
+      Alert.alert(t('added'), t('now_viewing', { name: owner }));
+    });
 
   const validEmail = /^\S+@\S+\.\S+$/.test(email.trim());
 
@@ -100,80 +116,126 @@ export default function Login() {
           </Card>
         )}
 
-        <Card>
-          {step === 'email' ? (
-            <>
-              <Field
-                label={t('email')}
-                placeholder="you@example.com"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoComplete="email"
-                value={email}
-                onChangeText={setEmail}
-              />
-              <Button
-                title={t('send_code')}
-                icon="email-outline"
-                disabled={!validEmail || !isSupabaseConfigured}
-                loading={busy === 'otp'}
-                onPress={() =>
-                  run('otp', async () => {
-                    await sendOtp(email);
-                    setStep('code');
-                  })
-                }
-              />
-            </>
-          ) : (
-            <>
-              <Txt style={{ marginBottom: 10 }}>{t('code_sent', { email: email.trim() })}</Txt>
-              <Field
-                label={t('enter_code')}
-                placeholder="123456"
-                keyboardType="number-pad"
-                maxLength={8}
-                value={code}
-                onChangeText={setCode}
-                autoFocus
-              />
-              <Button
-                title={t('verify')}
-                icon="check-circle"
-                disabled={code.trim().length < 6}
-                loading={busy === 'verify'}
-                onPress={() => run('verify', () => verifyOtp(email, code))}
-              />
-              <Button variant="ghost" title={t('change_email')} onPress={() => setStep('email')} />
-            </>
-          )}
-        </Card>
-
-        <Row gap={10} style={{ marginVertical: 4 }}>
-          <View style={{ flex: 1, height: 1, backgroundColor: c.border }} />
-          <Txt muted>{t('or')}</Txt>
-          <View style={{ flex: 1, height: 1, backgroundColor: c.border }} />
-        </Row>
-
-        <Button
-          variant="secondary"
-          icon="google"
-          title={t('google_signin')}
-          disabled={!isSupabaseConfigured}
-          loading={busy === 'google'}
-          onPress={() => run('google', signInWithGoogle)}
-        />
-        {appMode === 'me' ? (
-          <>
-            <Button variant="outline" icon="cellphone" title={t('use_offline')} onPress={continueAsGuest} />
-            <Txt muted size="small" center>
-              {t('offline_note')}
+        {appMode === 'group' ? (
+          // ---------- Group Login: just a share code ----------
+          <Card>
+            <Txt bold size="large">
+              🔑 {t('enter_share_code')}
             </Txt>
-          </>
+            <Txt muted size="small" style={{ marginBottom: 10 }}>
+              {t('enter_share_code_hint')}
+            </Txt>
+            <Field
+              label={t('share_code')}
+              value={shareCode}
+              onChangeText={setShareCode}
+              placeholder="K7QM-2XPA"
+              autoCapitalize="characters"
+              autoCorrect={false}
+              maxLength={11}
+            />
+            <Field label={t('your_name')} value={viewerName} onChangeText={setViewerName} placeholder={t('name_placeholder')} />
+            <Button
+              icon="account-eye"
+              title={t('view_details')}
+              disabled={!isSupabaseConfigured || cleanCode(shareCode).length !== 8}
+              loading={busy === 'view'}
+              onPress={viewWithCode}
+            />
+          </Card>
         ) : (
-          <Txt muted size="small" center>
-            {t('group_login_note')}
-          </Txt>
+          // ---------- My Login: one tap, no email ----------
+          <>
+            <Card>
+              <Button
+                icon="play-circle"
+                title={t('start_no_email')}
+                disabled={!isSupabaseConfigured}
+                loading={busy === 'start'}
+                onPress={() => run('start', startAnonymous)}
+              />
+              <Txt muted size="small" center style={{ marginTop: 8 }}>
+                {t('start_no_email_note')}
+              </Txt>
+            </Card>
+            {!isSupabaseConfigured && (
+              <>
+                <Button variant="outline" icon="cellphone" title={t('use_offline')} onPress={continueAsGuest} />
+                <Txt muted size="small" center>
+                  {t('offline_note')}
+                </Txt>
+              </>
+            )}
+          </>
+        )}
+
+        {/* Email / Google: optional, to use the same account on another phone. */}
+        {isSupabaseConfigured && (
+          <>
+            <Button
+              variant="ghost"
+              icon={showEmail ? 'chevron-up' : 'email-outline'}
+              title={t('use_email_instead')}
+              onPress={() => setShowEmail(!showEmail)}
+            />
+            {showEmail && (
+              <Card>
+                {step === 'email' ? (
+                  <>
+                    <Field
+                      label={t('email')}
+                      placeholder="you@example.com"
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      autoComplete="email"
+                      value={email}
+                      onChangeText={setEmail}
+                    />
+                    <Button
+                      title={t('send_code')}
+                      icon="email-outline"
+                      disabled={!validEmail}
+                      loading={busy === 'otp'}
+                      onPress={() =>
+                        run('otp', async () => {
+                          await sendOtp(email);
+                          setStep('code');
+                        })
+                      }
+                    />
+                  </>
+                ) : (
+                  <>
+                    <Txt style={{ marginBottom: 10 }}>{t('code_sent', { email: email.trim() })}</Txt>
+                    <Field
+                      label={t('enter_code')}
+                      placeholder="123456"
+                      keyboardType="number-pad"
+                      maxLength={8}
+                      value={otp}
+                      onChangeText={setOtp}
+                    />
+                    <Button
+                      title={t('verify')}
+                      icon="check-circle"
+                      disabled={otp.trim().length < 6}
+                      loading={busy === 'verify'}
+                      onPress={() => run('verify', () => verifyOtp(email, otp))}
+                    />
+                    <Button variant="ghost" title={t('change_email')} onPress={() => setStep('email')} />
+                  </>
+                )}
+                <Button
+                  style={{ marginTop: 10 }}
+                  variant="secondary"
+                  icon="google"
+                  title={t('google_signin')}
+                  loading={busy === 'google'}
+                  onPress={() => run('google', signInWithGoogle)}
+                />
+              </Card>
+            )}
+          </>
         )}
       </Screen>
     </KeyboardAvoidingView>

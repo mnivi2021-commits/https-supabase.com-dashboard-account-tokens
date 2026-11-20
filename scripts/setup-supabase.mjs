@@ -134,9 +134,9 @@ async function main() {
   const check = await api('POST', `/v1/projects/${ref}/database/query`, {
     query:
       "select (select count(*)::int from information_schema.tables where table_schema = 'public' and table_name in " +
-      "('profiles','weight_logs','workouts','sleep_logs','water_logs','step_logs','targets','reminders','groups','group_members','group_join_requests','cheers','food_logs')) as tables, " +
+      "('profiles','weight_logs','workouts','sleep_logs','water_logs','step_logs','targets','reminders','groups','group_members','group_join_requests','cheers','food_logs','share_links')) as tables, " +
       "(select count(*)::int from pg_proc where pronamespace = 'public'::regnamespace and proname in " +
-      "('request_join','respond_join_request','list_join_requests','get_group_dashboard','get_group_summary','get_group_challenge')) as fns, " +
+      "('request_join','respond_join_request','list_join_requests','get_group_dashboard','get_group_summary','get_group_challenge','my_share_code','add_share_code','get_shared_dashboard')) as fns, " +
       // Signed-in users must be able to use every table (RLS limits them to their own rows).
       // has_table_privilege works under the read-only role (information_schema would hide the grants).
       "(select count(*)::int from pg_class c where c.relnamespace = 'public'::regnamespace and c.relkind = 'r' " +
@@ -145,7 +145,7 @@ async function main() {
   });
   const row = Array.isArray(check) ? check[0] : undefined;
   console.log(
-    `  ✓ Schema applied${row ? ` (${row.tables}/13 tables, ${row.fns}/6 group functions, ${row.granted} tables open to signed-in users)` : ''}`,
+    `  ✓ Schema applied${row ? ` (${row.tables}/14 tables, ${row.fns}/9 functions, ${row.granted} tables open to signed-in users)` : ''}`,
   );
   if (row && row.granted < row.tables) {
     throw new Error('Signed-in users cannot access all tables (missing GRANTs). Check the end of supabase/schema.sql.');
@@ -155,6 +155,8 @@ async function main() {
   console.log('• Configuring login (6-digit email code, redirect URLs)…');
   const auth = {
     site_url: 'healthtracker://',
+    // 'Start' without email: a cloud account tied to this phone (no login link needed).
+    external_anonymous_users_enabled: true,
     // Expo Go opens links like exp://192.168.1.5:8081/--/auth-callback, so allow this PC's
     // own network addresses explicitly as well as the generic patterns.
     uri_allow_list: [

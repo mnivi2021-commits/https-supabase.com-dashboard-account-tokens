@@ -426,75 +426,6 @@ returns void language sql security definer set search_path = public as $$
   where group_id = p_group_id and user_id = auth.uid();
 $$;
 
--- One row per member of a group for a given day. Fields a member chose not to
--- share are NULL (you always see your own data).
-create or replace function public.get_group_dashboard(p_group_id uuid, p_day date)
-returns table (
-  user_id uuid, name text, is_admin boolean, category text, photo_path text,
-  weight_kg numeric, bmi numeric, workout_minutes numeric, workout_calories numeric,
-  workout_types text, steps int, sleep_hours numeric, water_ml int,
-  food_kcal numeric, protein numeric, carbs numeric, fat numeric, target_pct int,
-  cheers_today int, i_cheered boolean
-) language sql stable security definer set search_path = public as $$
-  with m as (
-    select gm.user_id, gm.category, gm.joined_at, g.admin_id, p.*,
-           (gm.user_id = auth.uid()) as me
-    from group_members gm
-    join groups g on g.id = gm.group_id
-    left join profiles p on p.id = gm.user_id
-    where gm.group_id = p_group_id and public.is_member(p_group_id)
-  )
-  select
-    m.user_id,
-    coalesce(m.name, '?'),
-    m.admin_id = m.user_id,
-    m.category,
-    case when m.me or coalesce((m.share->>'photo')::boolean, false) then m.photo_path end,
-    case when m.me or coalesce((m.share->>'weight')::boolean, true) then m.weight_kg end,
-    case when m.me or coalesce((m.share->>'bmi')::boolean, true)
-         then round(m.weight_kg / nullif((m.height_cm / 100.0) ^ 2, 0), 1) end,
-    case when m.me or coalesce((m.share->>'workouts')::boolean, true) then w.minutes end,
-    case when m.me or coalesce((m.share->>'workouts')::boolean, true) then w.calories end,
-    case when m.me or coalesce((m.share->>'workouts')::boolean, true) then w.types end,
-    case when m.me or coalesce((m.share->>'steps')::boolean, true) then coalesce(s.steps, 0) end,
-    case when m.me or coalesce((m.share->>'sleep')::boolean, true) then sl.hours end,
-    case when m.me or coalesce((m.share->>'water')::boolean, true) then coalesce(wa.ml, 0) end,
-    case when m.me or coalesce((m.share->>'food')::boolean, true) then fd.kcal end,
-    case when m.me or coalesce((m.share->>'food')::boolean, true) then fd.protein end,
-    case when m.me or coalesce((m.share->>'food')::boolean, true) then fd.carbs end,
-    case when m.me or coalesce((m.share->>'food')::boolean, true) then fd.fat end,
-    round(100 * (
-        least(1, coalesce(s.steps, 0)::numeric / nullif(coalesce(t.steps, 8000), 0))
-      + least(1, coalesce(w.minutes, 0) / nullif(coalesce(t.workout_minutes, 30), 0))
-      + least(1, coalesce(sl.hours, 0) / nullif(coalesce(t.sleep_hours, 8), 0))
-      + least(1, coalesce(wa.ml, 0)::numeric / nullif(coalesce(t.water_ml, 2000), 0))
-    ) / 4)::int,
-    (select count(*) from cheers c where c.to_user = m.user_id and c.group_id = p_group_id and c.date = p_day)::int,
-    exists (select 1 from cheers c where c.to_user = m.user_id and c.from_user = auth.uid()
-            and c.group_id = p_group_id and c.date = p_day)
-  from m
-  left join lateral (
-    -- count-based workouts store reps; estimate ~3 s per rep for active minutes
-    select coalesce(sum(coalesce(x.minutes, x.reps * coalesce(x.sets, 1) * 3 / 60.0)), 0) as minutes,
-           coalesce(sum(x.calories), 0) as calories,
-           string_agg(distinct x.type, ',') as types
-    from workouts x where x.user_id = m.user_id and x.date = p_day
-  ) w on true
-  left join step_logs s on s.user_id = m.user_id and s.date = p_day
-  left join lateral (select sum(hours) as hours from sleep_logs y where y.user_id = m.user_id and y.date = p_day) sl on true
-  left join lateral (
-    select coalesce(nullif(v.ml, 0), v.glasses * 250) as ml
-    from water_logs v where v.user_id = m.user_id and v.date = p_day
-  ) wa on true
-  left join lateral (
-    select round(coalesce(sum(z.kcal), 0)) as kcal, round(coalesce(sum(z.protein), 0)) as protein,
-           round(coalesce(sum(z.carbs), 0)) as carbs, round(coalesce(sum(z.fat), 0)) as fat
-    from food_logs z where z.user_id = m.user_id and z.date = p_day
-  ) fd on true
-  left join targets t on t.user_id = m.user_id
-  order by m.joined_at;
-$$;
-
 -- Totals per member between two dates (daily / weekly / monthly group report).
 create or replace function public.get_group_summary(p_group_id uuid, p_from date, p_to date)
 returns table (
@@ -567,6 +498,219 @@ returns table (
     n
   from base;
 $$;
+
+
+
+-- ---------------------------------------------------------------------
+-- One person's day report (used by groups AND share codes).
+-- INTERNAL: not callable by app users directly (it takes any user id);
+-- only the SECURITY DEFINER functions below call it, after checking access.
+-- Fields the person chose not to share are NULL (you always see your own).
+-- ---------------------------------------------------------------------
+
+create or replace function public.person_day(p_user uuid, p_day date)
+returns table (
+  name text, photo_path text, weight_kg numeric, bmi numeric,
+  workout_minutes numeric, workout_calories numeric, workout_types text,
+  steps int, sleep_hours numeric, water_ml int,
+  food_kcal numeric, protein numeric, carbs numeric, fat numeric, target_pct int
+) language sql stable security definer set search_path = public as $$
+  select
+    coalesce(p.name, '?'),
+    case when x.me or coalesce((p.share->>'photo')::boolean, false) then p.photo_path end,
+    case when x.me or coalesce((p.share->>'weight')::boolean, true) then p.weight_kg end,
+    case when x.me or coalesce((p.share->>'bmi')::boolean, true)
+         then round(p.weight_kg / nullif((p.height_cm / 100.0) ^ 2, 0), 1) end,
+    case when x.me or coalesce((p.share->>'workouts')::boolean, true) then w.minutes end,
+    case when x.me or coalesce((p.share->>'workouts')::boolean, true) then w.calories end,
+    case when x.me or coalesce((p.share->>'workouts')::boolean, true) then w.types end,
+    case when x.me or coalesce((p.share->>'steps')::boolean, true) then coalesce(s.steps, 0) end,
+    case when x.me or coalesce((p.share->>'sleep')::boolean, true) then sl.hours end,
+    case when x.me or coalesce((p.share->>'water')::boolean, true) then coalesce(wa.ml, 0) end,
+    case when x.me or coalesce((p.share->>'food')::boolean, true) then fd.kcal end,
+    case when x.me or coalesce((p.share->>'food')::boolean, true) then fd.protein end,
+    case when x.me or coalesce((p.share->>'food')::boolean, true) then fd.carbs end,
+    case when x.me or coalesce((p.share->>'food')::boolean, true) then fd.fat end,
+    round(100 * (
+        least(1, coalesce(s.steps, 0)::numeric / nullif(coalesce(t.steps, 8000), 0))
+      + least(1, coalesce(w.minutes, 0) / nullif(coalesce(t.workout_minutes, 30), 0))
+      + least(1, coalesce(sl.hours, 0) / nullif(coalesce(t.sleep_hours, 8), 0))
+      + least(1, coalesce(wa.ml, 0)::numeric / nullif(coalesce(t.water_ml, 2000), 0))
+    ) / 4)::int
+  from (select p_user = auth.uid() as me) x
+  left join profiles p on p.id = p_user
+  left join lateral (
+    -- count-based workouts store reps; estimate ~3 s per rep for active minutes
+    select coalesce(sum(coalesce(z.minutes, z.reps * coalesce(z.sets, 1) * 3 / 60.0)), 0) as minutes,
+           coalesce(sum(z.calories), 0) as calories,
+           string_agg(distinct z.type, ',') as types
+    from workouts z where z.user_id = p_user and z.date = p_day
+  ) w on true
+  left join step_logs s on s.user_id = p_user and s.date = p_day
+  left join lateral (select sum(y.hours) as hours from sleep_logs y where y.user_id = p_user and y.date = p_day) sl on true
+  left join lateral (
+    select coalesce(nullif(v.ml, 0), v.glasses * 250) as ml
+    from water_logs v where v.user_id = p_user and v.date = p_day
+  ) wa on true
+  left join lateral (
+    select round(coalesce(sum(f.kcal), 0)) as kcal, round(coalesce(sum(f.protein), 0)) as protein,
+           round(coalesce(sum(f.carbs), 0)) as carbs, round(coalesce(sum(f.fat), 0)) as fat
+    from food_logs f where f.user_id = p_user and f.date = p_day
+  ) fd on true
+  left join targets t on t.user_id = p_user;
+$$;
+revoke execute on function public.person_day(uuid, date) from public, anon, authenticated;
+
+-- One row per member of a group for a given day.
+create or replace function public.get_group_dashboard(p_group_id uuid, p_day date)
+returns table (
+  user_id uuid, name text, is_admin boolean, category text, photo_path text,
+  weight_kg numeric, bmi numeric, workout_minutes numeric, workout_calories numeric,
+  workout_types text, steps int, sleep_hours numeric, water_ml int,
+  food_kcal numeric, protein numeric, carbs numeric, fat numeric, target_pct int,
+  cheers_today int, i_cheered boolean
+) language sql stable security definer set search_path = public as $$
+  select
+    gm.user_id, d.name, g.admin_id = gm.user_id, gm.category, d.photo_path,
+    d.weight_kg, d.bmi, d.workout_minutes, d.workout_calories, d.workout_types,
+    d.steps, d.sleep_hours, d.water_ml, d.food_kcal, d.protein, d.carbs, d.fat, d.target_pct,
+    (select count(*) from cheers c where c.to_user = gm.user_id and c.group_id = p_group_id and c.date = p_day)::int,
+    exists (select 1 from cheers c where c.to_user = gm.user_id and c.from_user = auth.uid()
+            and c.group_id = p_group_id and c.date = p_day)
+  from group_members gm
+  join groups g on g.id = gm.group_id
+  cross join lateral public.person_day(gm.user_id, p_day) d
+  where gm.group_id = p_group_id and public.is_member(p_group_id)
+  order by gm.joined_at;
+$$;
+
+-- ---------------------------------------------------------------------
+-- Personal share codes: "Group Login" without email.
+-- Each person has a code (e.g. K7QM2XPA). Anyone who enters it can view that
+-- person's day report (respecting their share settings) until removed.
+-- ---------------------------------------------------------------------
+
+alter table public.profiles add column if not exists share_code text unique;
+
+create table if not exists public.share_links (
+  owner_id    uuid not null references auth.users (id) on delete cascade,
+  viewer_id   uuid not null references auth.users (id) on delete cascade,
+  viewer_name text not null default '',
+  created_at  timestamptz not null default now(),
+  primary key (owner_id, viewer_id)
+);
+alter table public.share_links enable row level security;
+-- No direct table policies: everything goes through the functions below.
+
+-- 8 characters from an alphabet without look-alikes (no 0/O, 1/I/L), crypto-random.
+create or replace function public.new_share_code()
+returns text language plpgsql volatile set search_path = public as $$
+declare
+  alphabet constant text := 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  b bytea;
+  c text;
+  i int;
+begin
+  loop
+    b := uuid_send(gen_random_uuid());
+    c := '';
+    for i in 0..7 loop
+      c := c || substr(alphabet, 1 + (get_byte(b, i) % length(alphabet)), 1);
+    end loop;
+    exit when not exists (select 1 from profiles where share_code = c);
+  end loop;
+  return c;
+end $$;
+revoke execute on function public.new_share_code() from public, anon, authenticated;
+
+create or replace function public.my_share_code()
+returns text language plpgsql security definer set search_path = public as $$
+declare c text;
+begin
+  if auth.uid() is null then raise exception 'NOT_AUTHENTICATED'; end if;
+  if not exists (select 1 from profiles where id = auth.uid()) then raise exception 'NO_PROFILE'; end if;
+  select share_code into c from profiles where id = auth.uid();
+  if c is null then
+    c := public.new_share_code();
+    update profiles set share_code = c where id = auth.uid();
+  end if;
+  return c;
+end $$;
+
+-- New code; everyone who used the old code loses access.
+create or replace function public.reset_share_code()
+returns text language plpgsql security definer set search_path = public as $$
+declare c text;
+begin
+  if not exists (select 1 from profiles where id = auth.uid()) then raise exception 'NO_PROFILE'; end if;
+  c := public.new_share_code();
+  update profiles set share_code = c where id = auth.uid();
+  delete from share_links where owner_id = auth.uid();
+  return c;
+end $$;
+
+-- Viewer enters a code. Returns the owner's name.
+create or replace function public.add_share_code(p_code text, p_name text default '')
+returns text language plpgsql security definer set search_path = public as $$
+declare
+  v_owner public.profiles;
+  code text := upper(regexp_replace(coalesce(p_code, ''), '[^A-Za-z0-9]', '', 'g'));
+begin
+  if auth.uid() is null then raise exception 'NOT_AUTHENTICATED'; end if;
+  select * into v_owner from profiles where share_code = code;
+  if v_owner.id is null then raise exception 'INVALID_CODE'; end if;
+  if v_owner.id = auth.uid() then raise exception 'OWN_CODE'; end if;
+  if (select count(*) from share_links where viewer_id = auth.uid()) >= 20 then
+    raise exception 'TOO_MANY_PEOPLE';
+  end if;
+  insert into share_links (owner_id, viewer_id, viewer_name)
+  values (v_owner.id, auth.uid(), left(trim(coalesce(p_name, '')), 40))
+  on conflict (owner_id, viewer_id) do update set viewer_name = excluded.viewer_name;
+  return v_owner.name;
+end $$;
+
+-- Day report for everyone whose code I entered.
+create or replace function public.get_shared_dashboard(p_day date)
+returns table (
+  user_id uuid, name text, photo_path text, weight_kg numeric, bmi numeric,
+  workout_minutes numeric, workout_calories numeric, workout_types text,
+  steps int, sleep_hours numeric, water_ml int,
+  food_kcal numeric, protein numeric, carbs numeric, fat numeric, target_pct int
+) language sql stable security definer set search_path = public as $$
+  select l.owner_id, d.name, d.photo_path, d.weight_kg, d.bmi,
+         d.workout_minutes, d.workout_calories, d.workout_types,
+         d.steps, d.sleep_hours, d.water_ml, d.food_kcal, d.protein, d.carbs, d.fat, d.target_pct
+  from share_links l
+  cross join lateral public.person_day(l.owner_id, p_day) d
+  where l.viewer_id = auth.uid()
+  order by l.created_at;
+$$;
+
+-- Owner: who can see my data.
+create or replace function public.my_viewers()
+returns table (viewer_id uuid, viewer_name text, created_at timestamptz)
+language sql stable security definer set search_path = public as $$
+  select l.viewer_id, l.viewer_name, l.created_at from share_links l
+  where l.owner_id = auth.uid() order by l.created_at;
+$$;
+
+create or replace function public.remove_viewer(p_viewer uuid)
+returns void language sql security definer set search_path = public as $$
+  delete from share_links where owner_id = auth.uid() and viewer_id = p_viewer;
+$$;
+
+-- Viewer: stop following someone.
+create or replace function public.remove_shared(p_owner uuid)
+returns void language sql security definer set search_path = public as $$
+  delete from share_links where viewer_id = auth.uid() and owner_id = p_owner;
+$$;
+
+revoke execute on function public.my_share_code(), public.reset_share_code(), public.add_share_code(text, text),
+  public.get_shared_dashboard(date), public.my_viewers(), public.remove_viewer(uuid), public.remove_shared(uuid)
+from anon, public;
+grant execute on function public.my_share_code(), public.reset_share_code(), public.add_share_code(text, text),
+  public.get_shared_dashboard(date), public.my_viewers(), public.remove_viewer(uuid), public.remove_shared(uuid)
+to authenticated;
 
 -- Only signed-in users may call the functions.
 revoke execute on function

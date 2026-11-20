@@ -12,7 +12,8 @@ Works in **English, தமிழ் and हिन्दी**, in light and dark 
 
 | Area | What it does |
 |---|---|
-| **Login** | Choose **My Login** (own health tracking) or **Group Login** (only your groups' member day reports). Email login link (or code, if your Supabase email template has one), Google sign-in, or "use without account" (offline only) |
+| **Login** | **My Login → Start**: one tap, no email (Supabase anonymous sign-in; data is backed up and tied to this phone). Email / Google are optional, for using the same data on another phone. Offline mode only when Supabase is not configured |
+| **Share code (Group Login)** | Every user gets a personal 8-character code (Profile / Home). Family choose **Group Login**, enter the code and their name, and see that person's daily report (food, water, workout, sleep, steps, target, with ◀ ▶ days) — no email needed. The owner sees who has access, can remove anyone, or make a new code |
 | **Profile & BMI** | 8-step onboarding (name, age, gender, height in cm or ft/in, weight, blood group, private photo, target weight + date) with **animated how-to-measure guides** for height, weight and the full-size photo → BMI report with **Asian/Indian ranges**, colour gauge, ideal weight range, daily calories & water, diet / exercise / lifestyle tips, doctor disclaimer |
 | **Workouts** | 10 workouts (walking, jogging, running, cycling, yoga, pull-ups, sit-ups, push-ups, squats, skipping). Time-based or reps × sets. Calories via the **MET formula** using your weight. **Live walk** mode with pedometer steps |
 | **Steps** | Automatic step counting with the phone pedometer (`expo-sensors`) |

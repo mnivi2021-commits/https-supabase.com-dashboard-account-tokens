@@ -5,6 +5,7 @@ import { Avatar } from '@/components/pickers';
 import { ProgressRing } from '@/components/ProgressRing';
 import { Button, Card, Chip, Icon, ProgressBar, Row, Screen, SectionTitle, Stat, Txt } from '@/components/ui';
 import { FoodCard } from '@/components/FoodCard';
+import { ShareCodeCard } from '@/features/share/ShareCodeCard';
 import { SyncRefresh } from '@/components/SyncRefresh';
 import { useStepsStatus } from '@/data/steps';
 import { useData } from '@/data/store';
@@ -118,6 +119,8 @@ export default function Home() {
           <Txt style={{ flex: 1 }}>{motivation}</Txt>
         </Row>
       </Card>
+
+      <ShareCodeCard compact />
     </Screen>
   );
 }

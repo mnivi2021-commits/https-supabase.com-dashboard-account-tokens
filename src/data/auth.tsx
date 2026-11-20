@@ -18,6 +18,10 @@ interface AuthValue {
   email: string | null;
   /** Offline-only mode: no account, data stays on this phone. */
   guest: boolean;
+  /** Signed in with "Start" (no email): a cloud account tied to this phone. */
+  isAnonymous: boolean;
+  /** Creates a cloud account without email or login link. */
+  startAnonymous: () => Promise<void>;
   sendOtp: (email: string) => Promise<void>;
   verifyOtp: (email: string, code: string) => Promise<void>;
   signInWithGoogle: () => Promise<boolean>;
@@ -104,6 +108,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return true;
   }, []);
 
+  const startAnonymous = useCallback(async () => {
+    const { error } = await supabase.auth.signInAnonymously();
+    if (error) throw error;
+  }, []);
+
   const continueAsGuest = useCallback(async () => {
     await AsyncStorage.setItem(GUEST_KEY, '1');
     setGuest(true);
@@ -123,13 +132,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       userId: session?.user.id ?? null,
       email: session?.user.email ?? null,
       guest,
+      isAnonymous: !!session?.user.is_anonymous,
+      startAnonymous,
       sendOtp,
       verifyOtp,
       signInWithGoogle,
       continueAsGuest,
       signOut,
     }),
-    [loading, session, guest, sendOtp, verifyOtp, signInWithGoogle, continueAsGuest, signOut],
+    [loading, session, guest, startAnonymous, sendOtp, verifyOtp, signInWithGoogle, continueAsGuest, signOut],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
