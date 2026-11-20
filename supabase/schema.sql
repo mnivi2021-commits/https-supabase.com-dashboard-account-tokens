@@ -25,7 +25,7 @@ create table if not exists public.profiles (
   goal_type         text not null default 'maintain' check (goal_type in ('lose', 'gain', 'maintain')),
   -- What the member shares with their groups. Photo is private by default.
   share             jsonb not null default
-                      '{"photo":false,"weight":true,"bmi":true,"workouts":true,"steps":true,"sleep":true,"water":true}',
+                      '{"photo":false,"weight":true,"bmi":true,"workouts":true,"steps":true,"sleep":true,"water":true,"food":true}',
   created_at        timestamptz not null default now(),
   updated_at        timestamptz not null default now()
 );
@@ -55,6 +55,24 @@ create table if not exists public.workouts (
   created_at  timestamptz not null default now()
 );
 create index if not exists workouts_user_date on public.workouts (user_id, date);
+
+-- Food eaten. Nutrition values are for the whole entry (serving × qty).
+create table if not exists public.food_logs (
+  id         uuid primary key,
+  user_id    uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  date       date not null,
+  meal       text not null check (meal in ('breakfast', 'lunch', 'snack', 'dinner')),
+  food_id    text,
+  name       text not null,
+  qty        numeric(5, 1) not null default 1,
+  serving    text,
+  kcal       numeric(7, 1) not null default 0,
+  protein    numeric(6, 1) not null default 0,
+  carbs      numeric(6, 1) not null default 0,
+  fat        numeric(6, 1) not null default 0,
+  created_at timestamptz not null default now()
+);
+create index if not exists food_logs_user_date on public.food_logs (user_id, date);
 
 create table if not exists public.sleep_logs (
   id       uuid primary key,
@@ -204,6 +222,7 @@ create trigger group_limit before insert on public.group_members
 
 alter table public.profiles            enable row level security;
 alter table public.weight_logs         enable row level security;
+alter table public.food_logs           enable row level security;
 alter table public.workouts            enable row level security;
 alter table public.sleep_logs          enable row level security;
 alter table public.water_logs          enable row level security;
@@ -222,7 +241,7 @@ create policy "own profile" on public.profiles for all to authenticated
 do $$
 declare t text;
 begin
-  foreach t in array array['weight_logs','workouts','sleep_logs','water_logs','step_logs','targets','reminders']
+  foreach t in array array['weight_logs','food_logs','workouts','sleep_logs','water_logs','step_logs','targets','reminders']
   loop
     execute format('drop policy if exists "own rows" on public.%I', t);
     execute format(
@@ -289,6 +308,8 @@ drop function if exists public.get_group_dashboard(date);
 drop function if exists public.get_group_summary(date, date);
 drop function if exists public.get_group_challenge(date);
 drop function if exists public.my_group_id();
+-- Return columns changed (food added), so recreate:
+drop function if exists public.get_group_dashboard(uuid, date);
 
 -- ---------------------------------------------------------------------
 -- Group functions (called from the app with supabase.rpc)
@@ -411,7 +432,8 @@ create or replace function public.get_group_dashboard(p_group_id uuid, p_day dat
 returns table (
   user_id uuid, name text, is_admin boolean, category text, photo_path text,
   weight_kg numeric, bmi numeric, workout_minutes numeric, workout_calories numeric,
-  workout_types text, steps int, sleep_hours numeric, water_ml int, target_pct int,
+  workout_types text, steps int, sleep_hours numeric, water_ml int,
+  food_kcal numeric, protein numeric, carbs numeric, fat numeric, target_pct int,
   cheers_today int, i_cheered boolean
 ) language sql stable security definer set search_path = public as $$
   with m as (
@@ -437,6 +459,10 @@ returns table (
     case when m.me or coalesce((m.share->>'steps')::boolean, true) then coalesce(s.steps, 0) end,
     case when m.me or coalesce((m.share->>'sleep')::boolean, true) then sl.hours end,
     case when m.me or coalesce((m.share->>'water')::boolean, true) then coalesce(wa.ml, 0) end,
+    case when m.me or coalesce((m.share->>'food')::boolean, true) then fd.kcal end,
+    case when m.me or coalesce((m.share->>'food')::boolean, true) then fd.protein end,
+    case when m.me or coalesce((m.share->>'food')::boolean, true) then fd.carbs end,
+    case when m.me or coalesce((m.share->>'food')::boolean, true) then fd.fat end,
     round(100 * (
         least(1, coalesce(s.steps, 0)::numeric / nullif(coalesce(t.steps, 8000), 0))
       + least(1, coalesce(w.minutes, 0) / nullif(coalesce(t.workout_minutes, 30), 0))
@@ -460,6 +486,11 @@ returns table (
     select coalesce(nullif(v.ml, 0), v.glasses * 250) as ml
     from water_logs v where v.user_id = m.user_id and v.date = p_day
   ) wa on true
+  left join lateral (
+    select round(coalesce(sum(z.kcal), 0)) as kcal, round(coalesce(sum(z.protein), 0)) as protein,
+           round(coalesce(sum(z.carbs), 0)) as carbs, round(coalesce(sum(z.fat), 0)) as fat
+    from food_logs z where z.user_id = m.user_id and z.date = p_day
+  ) fd on true
   left join targets t on t.user_id = m.user_id
   order by m.joined_at;
 $$;

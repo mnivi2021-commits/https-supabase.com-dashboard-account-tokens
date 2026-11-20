@@ -4,6 +4,7 @@ import { Pressable, View } from 'react-native';
 import { Avatar } from '@/components/pickers';
 import { ProgressRing } from '@/components/ProgressRing';
 import { Button, Card, Chip, Icon, ProgressBar, Row, Screen, SectionTitle, Stat, Txt } from '@/components/ui';
+import { FoodCard } from '@/components/FoodCard';
 import { SyncRefresh } from '@/components/SyncRefresh';
 import { useStepsStatus } from '@/data/steps';
 import { useData } from '@/data/store';
@@ -52,6 +53,9 @@ export default function Home() {
         </Pressable>
       </Row>
 
+      <FoodCard />
+      <WaterCard />
+
       <Card style={{ backgroundColor: c.primarySoft, borderColor: c.primary }}>
         <Row gap={10}>
           <Txt size="hero">🔥</Txt>
@@ -79,7 +83,6 @@ export default function Home() {
         )}
       </Card>
 
-      <WaterCard />
 
       <Card>
         <SectionTitle>{t('today')}</SectionTitle>

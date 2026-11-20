@@ -19,6 +19,7 @@ import { scheduleReminders } from '@/lib/notifications';
 import {
   DEFAULT_SHARE,
   DEFAULT_TARGETS,
+  type FoodLog,
   type Profile,
   type Reminder,
   type SleepLog,
@@ -32,6 +33,7 @@ import { deleteOp, profileToRow, pullAll, pushOps, upsertOp, uploadPhoto, type R
 
 export interface DataState {
   profile: Profile | null;
+  foods: FoodLog[];
   workouts: Workout[];
   sleeps: SleepLog[];
   weights: WeightLog[];
@@ -43,6 +45,7 @@ export interface DataState {
 
 const EMPTY: DataState = {
   profile: null,
+  foods: [],
   workouts: [],
   sleeps: [],
   weights: [],
@@ -66,6 +69,8 @@ interface DataValue extends DataState {
   lastSync: string | null;
   saveProfile: (p: Omit<Profile, 'updated_at'>, opts?: { photoChanged?: boolean }) => void;
   logWeight: (weightKg: number, date?: string) => void;
+  addFood: (f: Omit<FoodLog, 'id' | 'created_at'>) => void;
+  deleteFood: (id: string) => void;
   addWorkout: (w: NewWorkout) => Workout;
   deleteWorkout: (id: string) => void;
   saveSleep: (s: Omit<SleepLog, 'id'> & { id?: string }) => void;
@@ -98,7 +103,7 @@ function migrate(s: DataState): DataState {
   delete (targets as { water_glasses?: number }).water_glasses;
   const water = Object.fromEntries(Object.entries(s.water).map(([d, v]) => [d, waterToMl(v)]));
   const profile = s.profile ? { ...s.profile, share: { ...DEFAULT_SHARE, ...s.profile.share } } : null;
-  return { ...s, targets, water, profile };
+  return { ...s, foods: s.foods ?? [], targets, water, profile };
 }
 
 function mergeRemote(local: DataState, remote: RemoteData, queue: SyncOp[]): DataState {
@@ -139,6 +144,7 @@ function mergeRemote(local: DataState, remote: RemoteData, queue: SyncOp[]): Dat
 
   return {
     profile,
+    foods: byId('food_logs', local.foods, remote.foods),
     workouts: byId('workouts', local.workouts, remote.workouts),
     sleeps: byId('sleep_logs', local.sleeps, remote.sleeps),
     weights: byId('weight_logs', local.weights, remote.weights).sort((a, b) => a.date.localeCompare(b.date)),
@@ -323,6 +329,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   function enqueueAll(s: DataState) {
     const ops: SyncOp[] = [];
     if (s.profile) ops.push(upsertOp('profiles', profileToRow(s.profile), 'me'));
+    for (const x of s.foods) ops.push(upsertOp('food_logs', { ...x }, x.id));
     for (const w of s.workouts) ops.push(upsertOp('workouts', { ...w }, w.id));
     for (const x of s.sleeps) ops.push(upsertOp('sleep_logs', { ...x }, x.id));
     for (const x of s.weights) ops.push(upsertOp('weight_logs', { ...x }, x.id));
@@ -423,6 +430,23 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [commit],
   );
 
+  const addFood = useCallback<DataValue['addFood']>(
+    (input) => {
+      const s = stateRef.current;
+      const food: FoodLog = { ...input, id: newId(), created_at: new Date().toISOString() };
+      commit({ ...s, foods: [...s.foods, food] }, [upsertOp('food_logs', { ...food }, food.id)]);
+    },
+    [commit],
+  );
+
+  const deleteFood = useCallback<DataValue['deleteFood']>(
+    (id) => {
+      const s = stateRef.current;
+      commit({ ...s, foods: s.foods.filter((x) => x.id !== id) }, [deleteOp('food_logs', id)]);
+    },
+    [commit],
+  );
+
   const deleteWorkout = useCallback<DataValue['deleteWorkout']>(
     (id) => {
       const s = stateRef.current;
@@ -504,6 +528,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       lastSync,
       saveProfile,
       logWeight,
+      addFood,
+      deleteFood,
       addWorkout,
       deleteWorkout,
       saveSleep,
@@ -523,6 +549,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       lastSync,
       saveProfile,
       logWeight,
+      addFood,
+      deleteFood,
       addWorkout,
       deleteWorkout,
       saveSleep,

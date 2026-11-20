@@ -16,6 +16,7 @@ export interface ShareSettings {
   steps: boolean;
   sleep: boolean;
   water: boolean;
+  food: boolean;
 }
 
 export const DEFAULT_SHARE: ShareSettings = {
@@ -26,6 +27,7 @@ export const DEFAULT_SHARE: ShareSettings = {
   steps: true,
   sleep: true,
   water: true,
+  food: true,
 };
 
 export interface Profile {
@@ -73,6 +75,25 @@ export interface Workout {
   sets: number | null;
   steps: number | null;
   calories: number;
+  created_at: string;
+}
+
+export type Meal = 'breakfast' | 'lunch' | 'snack' | 'dinner';
+
+/** One food eaten. Nutrition values are for the whole entry (serving × qty). */
+export interface FoodLog {
+  id: string;
+  date: string;
+  meal: Meal;
+  /** Built-in food id, or null for a custom food. */
+  food_id: string | null;
+  name: string;
+  qty: number;
+  serving: string;
+  kcal: number;
+  protein: number;
+  carbs: number;
+  fat: number;
   created_at: string;
 }
 

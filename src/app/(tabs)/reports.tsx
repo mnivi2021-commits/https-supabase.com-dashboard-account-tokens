@@ -147,6 +147,12 @@ function DayView({ day }: { day: DaySummary }) {
         </Txt>
       </Card>
       <Card>
+        <SectionTitle right={<Txt bold color={c.primary}>{day.kcalIn} kcal</Txt>}>🍽️ {t('food')}</SectionTitle>
+        <Txt muted>
+          {t('protein')} {day.protein} g · {t('carbs')} {day.carbs} g · {t('fat')} {day.fat} g · {t('items_n', { n: day.foods.length })}
+        </Txt>
+      </Card>
+      <Card>
         {rows.map((r) => (
           <View key={r.label} style={{ marginBottom: 12 }}>
             <Row style={{ justifyContent: 'space-between', marginBottom: 4 }}>

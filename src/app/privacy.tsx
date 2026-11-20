@@ -15,6 +15,7 @@ const ITEMS: { key: keyof ShareSettings; label: TKey; emoji: string }[] = [
   { key: 'workouts', label: 'share_workouts', emoji: '🏃' },
   { key: 'steps', label: 'share_steps', emoji: '👟' },
   { key: 'sleep', label: 'share_sleep', emoji: '😴' },
+  { key: 'food', label: 'share_food', emoji: '🍽️' },
   { key: 'water', label: 'share_water', emoji: '💧' },
 ];
 

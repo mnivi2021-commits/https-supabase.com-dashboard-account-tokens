@@ -4,6 +4,7 @@ import { addDays, todayKey } from '@/lib/dates';
 import { AVATAR_BUCKET, isNetworkError, supabase } from '@/lib/supabase';
 import {
   DEFAULT_SHARE,
+  type FoodLog,
   type Profile,
   type Reminder,
   type SleepLog,
@@ -14,6 +15,7 @@ import {
 
 export type SyncTable =
   | 'profiles'
+  | 'food_logs'
   | 'workouts'
   | 'sleep_logs'
   | 'weight_logs'
@@ -34,6 +36,7 @@ export interface SyncOp {
 
 const ON_CONFLICT: Record<SyncTable, string> = {
   profiles: 'id',
+  food_logs: 'id',
   workouts: 'id',
   sleep_logs: 'id',
   weight_logs: 'id',
@@ -127,6 +130,7 @@ export async function signedPhotoUrls(paths: string[]): Promise<Record<string, s
 
 export interface RemoteData {
   profile: Profile | null;
+  foods: FoodLog[];
   workouts: Workout[];
   sleeps: SleepLog[];
   weights: WeightLog[];
@@ -141,7 +145,7 @@ type Row = Record<string, any>;
 /** Downloads this user's data (last ~13 months) from Supabase. Throws when offline. */
 export async function pullAll(userId: string): Promise<RemoteData> {
   const since = addDays(todayKey(), -400);
-  const [profile, workouts, sleeps, weights, water, steps, targets, reminders] = await Promise.all([
+  const [profile, workouts, sleeps, weights, water, steps, targets, reminders, foods] = await Promise.all([
     supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
     supabase.from('workouts').select('*').eq('user_id', userId).gte('date', since),
     supabase.from('sleep_logs').select('*').eq('user_id', userId).gte('date', since),
@@ -150,8 +154,9 @@ export async function pullAll(userId: string): Promise<RemoteData> {
     supabase.from('step_logs').select('*').eq('user_id', userId).gte('date', since),
     supabase.from('targets').select('*').eq('user_id', userId).maybeSingle(),
     supabase.from('reminders').select('*').eq('user_id', userId),
+    supabase.from('food_logs').select('*').eq('user_id', userId).gte('date', since),
   ]);
-  const firstError = [profile, workouts, sleeps, weights, water, steps, targets, reminders].find((r) => r.error)?.error;
+  const firstError = [profile, workouts, sleeps, weights, water, steps, targets, reminders, foods].find((r) => r.error)?.error;
   if (firstError) throw firstError;
 
   const p = profile.data as Row | null;
@@ -174,6 +179,20 @@ export async function pullAll(userId: string): Promise<RemoteData> {
           updated_at: p.updated_at ?? new Date().toISOString(),
         }
       : null,
+    foods: ((foods.data ?? []) as Row[]).map((x) => ({
+      id: x.id,
+      date: x.date,
+      meal: x.meal,
+      food_id: x.food_id ?? null,
+      name: x.name,
+      qty: Number(x.qty),
+      serving: x.serving ?? '',
+      kcal: Number(x.kcal),
+      protein: Number(x.protein ?? 0),
+      carbs: Number(x.carbs ?? 0),
+      fat: Number(x.fat ?? 0),
+      created_at: x.created_at,
+    })),
     workouts: ((workouts.data ?? []) as Row[]).map((w) => ({
       id: w.id,
       date: w.date,

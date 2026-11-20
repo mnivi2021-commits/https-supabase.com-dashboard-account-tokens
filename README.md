@@ -17,6 +17,7 @@ Works in **English, தமிழ் and हिन्दी**, in light and dark 
 | **Workouts** | 10 workouts (walking, jogging, running, cycling, yoga, pull-ups, sit-ups, push-ups, squats, skipping). Time-based or reps × sets. Calories via the **MET formula** using your weight. **Live walk** mode with pedometer steps |
 | **Steps** | Automatic step counting with the phone pedometer (`expo-sensors`) |
 | **Sleep** | Bedtime + wake time → hours, quality 😴 / 😐 / 😫, 7-night chart, bedtime reminder |
+| **Food** | Pick from ~45 common Indian foods (or add your own) per meal — breakfast, lunch, snacks, dinner — with quantity; calories, protein, carbs and fat are calculated against your daily calorie target. Shown first on Home and in group member cards |
 | **Water** | Counted in **ml**: pick a glass size (100 / 200 / 250 ml), each tap adds one glass; daily target in ml |
 | **Reminders** | 1 or 2 workout reminders per day at your chosen times, bedtime reminder, weekly weigh-in reminder |
 | **Targets** | Daily steps / workout minutes / sleep / water, monthly weight-loss or gain goal, progress rings on Home |

@@ -406,13 +406,21 @@ function MemberCard({
     return `${names}\n${Math.round(row.workout_minutes)} ${t('min')} · ${Math.round(row.workout_calories ?? 0)} kcal`;
   };
 
+  const food = (row?: DashboardRow) => {
+    if (!row) return '—';
+    if (row.food_kcal == null) return lock;
+    return `${row.food_kcal} kcal\nP ${row.protein ?? 0} · C ${row.carbs ?? 0} · F ${row.fat ?? 0} g`;
+  };
+
+  // Food and water first, then workout, sleep and the rest.
   const rows: { label: string; today: ReactNode; yesterday: ReactNode }[] = [
-    { label: `🎯 ${t('target')}`, today: status(r), yesterday: status(y) },
+    { label: `🍽️ ${t('food')}`, today: food(r), yesterday: food(y) },
     {
       label: `💧 ${t('water')}`,
       today: r.water_ml != null ? `${r.water_ml} ml` : lock,
       yesterday: y ? (y.water_ml != null ? `${y.water_ml} ml` : lock) : '—',
     },
+    { label: `🏃 ${t('workout')}`, today: workout(r), yesterday: workout(y) },
     {
       label: `😴 ${t('sleep')}`,
       today: r.sleep_hours != null ? `${r.sleep_hours} ${t('hrs')}` : '—',
@@ -423,7 +431,7 @@ function MemberCard({
       today: r.steps != null ? r.steps.toLocaleString() : lock,
       yesterday: y ? (y.steps != null ? y.steps.toLocaleString() : lock) : '—',
     },
-    { label: `🏃 ${t('workout')}`, today: workout(r), yesterday: workout(y) },
+    { label: `🎯 ${t('target')}`, today: status(r), yesterday: status(y) },
   ];
 
   return (

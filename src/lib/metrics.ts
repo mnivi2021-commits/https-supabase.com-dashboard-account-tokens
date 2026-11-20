@@ -2,10 +2,16 @@ import type { DataState } from '@/data/store';
 import type { TKey } from '@/i18n';
 import { addDays, todayKey } from './dates';
 import { activeMinutes, percent } from './health';
-import type { SleepQuality, Workout } from './types';
+import type { FoodLog, SleepQuality, Workout } from './types';
 
 export interface DaySummary {
   date: string;
+  foods: FoodLog[];
+  /** Food eaten (kcal) and macros (g). */
+  kcalIn: number;
+  protein: number;
+  carbs: number;
+  fat: number;
   workouts: Workout[];
   minutes: number;
   calories: number;
@@ -18,7 +24,12 @@ export interface DaySummary {
   targetPct: number;
 }
 
-export function daySummary(s: Pick<DataState, 'workouts' | 'steps' | 'sleeps' | 'water' | 'targets'>, date: string): DaySummary {
+export function daySummary(
+  s: Pick<DataState, 'workouts' | 'steps' | 'sleeps' | 'water' | 'targets'> & { foods?: FoodLog[] },
+  date: string,
+): DaySummary {
+  const foods = (s.foods ?? []).filter((x) => x.date === date).sort((a, b) => a.created_at.localeCompare(b.created_at));
+  const sumOf = (k: 'kcal' | 'protein' | 'carbs' | 'fat') => Math.round(foods.reduce((n, x) => n + (x[k] || 0), 0));
   const workouts = s.workouts.filter((w) => w.date === date).sort((a, b) => a.created_at.localeCompare(b.created_at));
   const minutes = Math.round(workouts.reduce((sum, w) => sum + activeMinutes(w), 0));
   const calories = Math.round(workouts.reduce((sum, w) => sum + (w.calories || 0), 0));
@@ -33,6 +44,11 @@ export function daySummary(s: Pick<DataState, 'workouts' | 'steps' | 'sleeps' | 
   };
   return {
     date,
+    foods,
+    kcalIn: sumOf('kcal'),
+    protein: sumOf('protein'),
+    carbs: sumOf('carbs'),
+    fat: sumOf('fat'),
     workouts,
     minutes,
     calories,

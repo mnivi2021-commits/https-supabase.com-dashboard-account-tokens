@@ -24,6 +24,10 @@ export interface DashboardRow {
   steps: number | null;
   sleep_hours: number | null;
   water_ml: number | null;
+  food_kcal: number | null;
+  protein: number | null;
+  carbs: number | null;
+  fat: number | null;
   target_pct: number | null;
   cheers_today: number;
   i_cheered: boolean;
@@ -122,6 +126,10 @@ export async function fetchDashboard(groupId: string, day: string): Promise<Dash
     steps: num(r.steps),
     sleep_hours: num(r.sleep_hours),
     water_ml: num(r.water_ml),
+    food_kcal: num(r.food_kcal),
+    protein: num(r.protein),
+    carbs: num(r.carbs),
+    fat: num(r.fat),
     target_pct: num(r.target_pct),
     cheers_today: Number(r.cheers_today ?? 0),
   }));

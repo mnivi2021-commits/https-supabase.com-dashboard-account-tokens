@@ -60,6 +60,8 @@ function Gate() {
         </Stack.Protected>
         <Stack.Protected guard={signedIn && hasProfile && !groupMode}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="food" options={{ title: t('food_title') }} />
+          <Stack.Screen name="add-food" options={{ title: t('add_food'), presentation: 'modal' }} />
           <Stack.Screen name="bmi-report" options={{ title: t('bmi_report') }} />
           <Stack.Screen name="log-workout" options={{ title: t('log_workout'), presentation: 'modal' }} />
           <Stack.Screen name="walk" options={{ title: t('live_walk') }} />
