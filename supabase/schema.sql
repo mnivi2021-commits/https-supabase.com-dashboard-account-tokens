@@ -93,6 +93,7 @@ create table if not exists public.water_logs (
   primary key (user_id, date)
 );
 alter table public.water_logs add column if not exists ml int not null default 0;
+alter table public.profiles add column if not exists health_issues text;  -- private, never shared
 
 create table if not exists public.step_logs (
   user_id uuid not null default auth.uid() references auth.users (id) on delete cascade,

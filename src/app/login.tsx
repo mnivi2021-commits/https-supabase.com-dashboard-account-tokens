@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, Text, useWindowDimensions, View } from 'react-native';
 
 import { LanguagePicker } from '@/components/LanguagePicker';
 import { Button, Card, Field, Icon, Row, Screen, Txt, type IconName } from '@/components/ui';
+import { BottomArt, BRAND, GradientButton, Logo, ReportClipboard, ReportPill, Wordmark } from '@/components/WelcomeArt';
 import { useAuth } from '@/data/auth';
 import { AddMemberForm } from '@/features/share/AddMemberForm';
 import { addMember, emitSharedChanged, shareErrorKey } from '@/features/share/api';
@@ -12,7 +13,8 @@ import { useSettings, type AppMode } from '@/theme/settings';
 type Stage = 'welcome' | AppMode;
 
 export default function Login() {
-  const { colors: c, t, setAppMode } = useSettings();
+  const { colors: c, t, setAppMode, isDark } = useSettings();
+  const { width } = useWindowDimensions();
   const { startAnonymous, sendOtp, verifyOtp, signInWithGoogle, continueAsGuest } = useAuth();
   const [stage, setStage] = useState<Stage>('welcome');
   const [showEmail, setShowEmail] = useState(false);
@@ -61,35 +63,6 @@ export default function Login() {
 
   const validEmail = /^\S+@\S+\.\S+$/.test(email.trim());
 
-  const bigChoice = (mode: AppMode, icon: IconName, title: string, sub: string, color: string) => (
-    <Pressable
-      accessibilityRole="button"
-      onPress={() => choose(mode)}
-      style={({ pressed }) => ({
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 16,
-        padding: 20,
-        borderRadius: 22,
-        borderWidth: 2,
-        borderColor: color,
-        backgroundColor: c.card,
-        opacity: pressed ? 0.8 : 1,
-      })}
-    >
-      <View style={{ width: 64, height: 64, borderRadius: 20, backgroundColor: color, alignItems: 'center', justifyContent: 'center' }}>
-        <Icon name={icon} size={38} color="#FFFFFF" />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Txt size="title" bold>
-          {title}
-        </Txt>
-        <Txt muted>{sub}</Txt>
-      </View>
-      <Icon name="chevron-right" size={30} color={color} />
-    </Pressable>
-  );
-
   const backBar = (title: string, icon: IconName) => (
     <Row gap={10} style={{ marginTop: 8 }}>
       <Button small variant="outline" icon="arrow-left" title={t('back')} onPress={() => setStage('welcome')} />
@@ -105,27 +78,27 @@ export default function Login() {
       <Screen edges={['top', 'left', 'right', 'bottom']}>
         {stage === 'welcome' && (
           <>
-            <View style={{ alignItems: 'center', marginTop: 28, marginBottom: 6 }}>
-              <View
-                style={{
-                  width: 104,
-                  height: 104,
-                  borderRadius: 30,
-                  backgroundColor: c.primary,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Icon name="heart-pulse" size={64} color="#FFFFFF" />
-              </View>
-              <Txt size="hero" bold style={{ marginTop: 14 }}>
-                {t('welcome')}
-              </Txt>
-              <Txt size="large" bold color={c.primary} center>
-                {t('welcome_sub')}
-              </Txt>
+            <View style={{ alignItems: 'center', marginTop: 10 }}>
+              <Logo size={118} />
+              <Wordmark first="Health" second="Tracker" />
             </View>
             <LanguagePicker />
+
+            <Row gap={8} style={{ alignItems: 'center' }}>
+              <View style={{ flex: 1, gap: 14 }}>
+                <View>
+                  <Text style={{ fontSize: 22, fontWeight: '900', color: isDark ? c.text : BRAND.navy, textTransform: 'uppercase' }}>
+                    {t('welcome_line1')}
+                  </Text>
+                  <Text style={{ fontSize: 24, fontWeight: '900', fontStyle: 'italic', color: BRAND.green, textTransform: 'uppercase' }}>
+                    {t('welcome_line2')}
+                  </Text>
+                </View>
+                <ReportPill label={t('analysis_report')} />
+              </View>
+              <ReportClipboard title={t('analysis_report')} width={width < 380 ? 104 : 124} />
+            </Row>
+
             {!isSupabaseConfigured && (
               <Card style={{ borderColor: c.warning, backgroundColor: c.cardAlt }}>
                 <Row gap={8}>
@@ -134,8 +107,25 @@ export default function Login() {
                 </Row>
               </Card>
             )}
-            {bigChoice('me', 'heart-pulse', t('my_login'), t('my_login_sub'), c.primary)}
-            {bigChoice('group', 'account-group', t('group_login'), t('group_login_sub'), c.secondary)}
+
+            <Card style={{ gap: 14, borderRadius: 24 }}>
+              <Row gap={12}>
+                <View style={{ flex: 1, height: 1.5, backgroundColor: c.border }} />
+                <Txt bold size="large">
+                  {t('choose_login')}
+                </Txt>
+                <View style={{ flex: 1, height: 1.5, backgroundColor: c.border }} />
+              </Row>
+              <GradientButton title={t('my_login')} icon="account" colors={[BRAND.blueLight, BRAND.blue]} onPress={() => choose('me')} />
+              <GradientButton
+                title={t('group_login')}
+                icon="account-group"
+                colors={[BRAND.greenLight, BRAND.green]}
+                onPress={() => choose('group')}
+              />
+            </Card>
+
+            <BottomArt width={width - 32} />
           </>
         )}
 

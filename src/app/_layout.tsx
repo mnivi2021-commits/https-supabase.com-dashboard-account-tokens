@@ -63,11 +63,11 @@ function Gate() {
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="food" options={{ title: t('food_title') }} />
           <Stack.Screen name="add-food" options={{ title: t('add_food'), presentation: 'modal' }} />
-          <Stack.Screen name="bmi-report" options={{ title: t('bmi_report') }} />
+          <Stack.Screen name="bmi-report" options={{ headerShown: false }} />
           <Stack.Screen name="log-workout" options={{ title: t('log_workout'), presentation: 'modal' }} />
           <Stack.Screen name="walk" options={{ title: t('live_walk') }} />
           <Stack.Screen name="weight" options={{ title: t('update_weight') }} />
-          <Stack.Screen name="edit-profile" options={{ title: t('edit_profile') }} />
+          <Stack.Screen name="edit-profile" options={{ headerShown: false }} />
           <Stack.Screen name="targets" options={{ title: t('targets') }} />
           <Stack.Screen name="reminders" options={{ title: t('reminders') }} />
           <Stack.Screen name="privacy" options={{ title: t('privacy') }} />

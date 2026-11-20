@@ -38,6 +38,8 @@ export interface Profile {
   height_unit: HeightUnit;
   weight_kg: number;
   blood_group: BloodGroup;
+  /** Free text, e.g. "Mild thyroid". Private (never shown to groups or viewers). */
+  health_issues?: string | null;
   /** Local file URI of the photo on this device. Never synced. */
   photo_uri: string | null;
   /** Path inside the private Supabase "avatars" bucket. */
