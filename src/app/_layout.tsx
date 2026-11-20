@@ -26,7 +26,7 @@ export default function RootLayout() {
 }
 
 function Gate() {
-  const { colors: c, isDark, t, ready: settingsReady } = useSettings();
+  const { colors: c, isDark, t, ready: settingsReady, appMode } = useSettings();
   const { session, guest } = useAuth();
   const { ready, profile } = useData();
 
@@ -34,6 +34,8 @@ function Gate() {
 
   const signedIn = !!session || guest;
   const hasProfile = !!profile;
+  // Group Login needs a real account (group data lives in the cloud).
+  const groupMode = appMode === 'group' && !!session;
 
   return (
     <>
@@ -53,7 +55,10 @@ function Gate() {
         <Stack.Protected guard={signedIn && !hasProfile}>
           <Stack.Screen name="onboarding" options={{ headerShown: false }} />
         </Stack.Protected>
-        <Stack.Protected guard={signedIn && hasProfile}>
+        <Stack.Protected guard={signedIn && hasProfile && groupMode}>
+          <Stack.Screen name="group-home" options={{ headerShown: false }} />
+        </Stack.Protected>
+        <Stack.Protected guard={signedIn && hasProfile && !groupMode}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="bmi-report" options={{ title: t('bmi_report') }} />
           <Stack.Screen name="log-workout" options={{ title: t('log_workout'), presentation: 'modal' }} />

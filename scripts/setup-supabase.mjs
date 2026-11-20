@@ -133,11 +133,14 @@ async function main() {
   const check = await api('POST', `/v1/projects/${ref}/database/query`, {
     query:
       "select count(*)::int as n from information_schema.tables where table_schema = 'public' and table_name in " +
-      "('profiles','weight_logs','workouts','sleep_logs','water_logs','step_logs','targets','reminders','groups','group_members','cheers')",
+      "('profiles','weight_logs','workouts','sleep_logs','water_logs','step_logs','targets','reminders','groups','group_members','group_join_requests','cheers') " +
+      "union all select count(*)::int from pg_proc where pronamespace = 'public'::regnamespace and proname in " +
+      "('request_join','respond_join_request','list_join_requests','get_group_dashboard','get_group_summary','get_group_challenge')",
     read_only: true,
   });
   const n = Array.isArray(check) ? check[0]?.n : undefined;
-  console.log(`  ✓ Schema applied${n != null ? ` (${n}/11 tables present)` : ''}`);
+  const fns = Array.isArray(check) ? check[1]?.n : undefined;
+  console.log(`  ✓ Schema applied${n != null ? ` (${n}/12 tables, ${fns}/6 group functions)` : ''}`);
 
   // ---- 4. Auth: login code email, redirect URLs, optional Google ----
   console.log('• Configuring login (6-digit email code, redirect URLs)…');

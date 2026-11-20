@@ -15,6 +15,7 @@ export interface ShareSettings {
   workouts: boolean;
   steps: boolean;
   sleep: boolean;
+  water: boolean;
 }
 
 export const DEFAULT_SHARE: ShareSettings = {
@@ -24,6 +25,7 @@ export const DEFAULT_SHARE: ShareSettings = {
   workouts: true,
   steps: true,
   sleep: true,
+  water: true,
 };
 
 export interface Profile {
@@ -94,15 +96,21 @@ export interface Targets {
   steps: number;
   workout_minutes: number;
   sleep_hours: number;
-  water_glasses: number;
+  /** Daily water goal in millilitres. */
+  water_ml: number;
+  /** Size of one glass in ml — each tap on the water counter adds this much. */
+  glass_ml: number;
   monthly_weight_change_kg: number;
 }
+
+export const GLASS_SIZES = [100, 200, 250] as const;
 
 export const DEFAULT_TARGETS: Targets = {
   steps: 8000,
   workout_minutes: 30,
   sleep_hours: 8,
-  water_glasses: 8,
+  water_ml: 2000,
+  glass_ml: 200,
   monthly_weight_change_kg: 2,
 };
 

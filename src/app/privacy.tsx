@@ -5,7 +5,7 @@ import { Switch } from 'react-native';
 import { Button, Card, Row, Screen, Txt } from '@/components/ui';
 import { useData } from '@/data/store';
 import type { TKey } from '@/i18n';
-import type { ShareSettings } from '@/lib/types';
+import { DEFAULT_SHARE, type ShareSettings } from '@/lib/types';
 import { useSettings } from '@/theme/settings';
 
 const ITEMS: { key: keyof ShareSettings; label: TKey; emoji: string }[] = [
@@ -15,12 +15,13 @@ const ITEMS: { key: keyof ShareSettings; label: TKey; emoji: string }[] = [
   { key: 'workouts', label: 'share_workouts', emoji: '🏃' },
   { key: 'steps', label: 'share_steps', emoji: '👟' },
   { key: 'sleep', label: 'share_sleep', emoji: '😴' },
+  { key: 'water', label: 'share_water', emoji: '💧' },
 ];
 
 export default function Privacy() {
   const { t, colors: c } = useSettings();
   const { profile, saveProfile } = useData();
-  const [share, setShare] = useState<ShareSettings>(profile!.share);
+  const [share, setShare] = useState<ShareSettings>({ ...DEFAULT_SHARE, ...profile!.share });
 
   const save = () => {
     saveProfile({ ...profile!, share });

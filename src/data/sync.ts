@@ -200,14 +200,18 @@ export async function pullAll(userId: string): Promise<RemoteData> {
       weight_kg: Number(w.weight_kg),
       bmi: Number(w.bmi ?? 0),
     })),
-    water: Object.fromEntries(((water.data ?? []) as Row[]).map((w) => [w.date, Number(w.glasses)])),
+    water: Object.fromEntries(
+      ((water.data ?? []) as Row[]).map((w) => [w.date, Number(w.ml) || Number(w.glasses ?? 0) * 250]),
+    ),
     steps: Object.fromEntries(((steps.data ?? []) as Row[]).map((s) => [s.date, Number(s.steps)])),
     targets: targets.data
       ? {
           steps: Number((targets.data as Row).steps),
           workout_minutes: Number((targets.data as Row).workout_minutes),
           sleep_hours: Number((targets.data as Row).sleep_hours),
-          water_glasses: Number((targets.data as Row).water_glasses),
+          water_ml:
+            Number((targets.data as Row).water_ml) || Number((targets.data as Row).water_glasses ?? 8) * 250,
+          glass_ml: Number((targets.data as Row).glass_ml) || 200,
           monthly_weight_change_kg: Number((targets.data as Row).monthly_weight_change_kg),
         }
       : null,

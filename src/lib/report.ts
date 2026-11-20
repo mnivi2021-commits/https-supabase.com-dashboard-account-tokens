@@ -26,7 +26,7 @@ export function buildReportHtml(r: ReportInput, t: (k: TKey) => string): string 
         <td>${d.date}</td>
         <td><div class="bar" style="width:${Math.round((d.minutes / maxMin) * 80)}px"></div> ${d.minutes}</td>
         <td>${d.calories}</td><td>${d.steps.toLocaleString()}</td><td>${d.sleepHours || '-'}</td>
-        <td>${d.water}</td><td>${d.targetPct}%</td></tr>`,
+        <td>${d.water} ml</td><td>${d.targetPct}%</td></tr>`,
     )
     .join('');
   const weight = r.weight

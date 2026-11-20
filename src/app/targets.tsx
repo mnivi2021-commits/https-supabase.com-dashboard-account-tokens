@@ -2,9 +2,10 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform } from 'react-native';
 
-import { Button, Card, Field, Screen, SectionTitle, Txt } from '@/components/ui';
+import { Button, Card, Chip, Field, Row, Screen, SectionTitle, Txt } from '@/components/ui';
 import { useData } from '@/data/store';
 import { dailyWater } from '@/lib/health';
+import { GLASS_SIZES } from '@/lib/types';
 import { useSettings } from '@/theme/settings';
 
 export default function TargetsScreen() {
@@ -13,7 +14,8 @@ export default function TargetsScreen() {
   const [steps, setSteps] = useState(String(targets.steps));
   const [minutes, setMinutes] = useState(String(targets.workout_minutes));
   const [sleep, setSleep] = useState(String(targets.sleep_hours));
-  const [water, setWater] = useState(String(targets.water_glasses));
+  const [water, setWater] = useState(String(targets.water_ml));
+  const [glass, setGlass] = useState<number>(targets.glass_ml);
   const [monthly, setMonthly] = useState(String(targets.monthly_weight_change_kg));
 
   const n = (s: string) => parseFloat(s);
@@ -25,7 +27,8 @@ export default function TargetsScreen() {
       steps: Math.round(n(steps)),
       workout_minutes: Math.round(n(minutes)),
       sleep_hours: n(sleep),
-      water_glasses: Math.round(n(water)),
+      water_ml: Math.round(n(water)),
+      glass_ml: glass,
       monthly_weight_change_kg: n(monthly),
     });
     router.back();
@@ -40,12 +43,20 @@ export default function TargetsScreen() {
           <Field label={`🏃 ${t('workout_minutes')}`} keyboardType="number-pad" value={minutes} onChangeText={setMinutes} />
           <Field label={`😴 ${t('sleep_hours')}`} keyboardType="decimal-pad" value={sleep} onChangeText={setSleep} />
           <Field
-            label={`💧 ${t('water_glasses')}`}
+            label={`💧 ${t('water_ml_target')}`}
             keyboardType="number-pad"
             value={water}
             onChangeText={setWater}
-            hint={profile ? t('water_hint', { n: dailyWater(profile.weight_kg).glasses }) : undefined}
+            hint={profile ? t('water_hint', { n: dailyWater(profile.weight_kg).ml }) : undefined}
           />
+          <Txt bold style={{ marginBottom: 8 }}>
+            {t('glass_size')}
+          </Txt>
+          <Row gap={8}>
+            {GLASS_SIZES.map((g) => (
+              <Chip key={g} label={`${g} ml`} selected={glass === g} onPress={() => setGlass(g)} />
+            ))}
+          </Row>
         </Card>
         <Card>
           <SectionTitle>{t('monthly_goal')}</SectionTitle>

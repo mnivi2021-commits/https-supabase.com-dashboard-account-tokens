@@ -11,7 +11,7 @@ import { BMI_COLORS, bmiCategory, calcBmi, cmToFeetInches } from '@/lib/health';
 import { useSettings, type ThemeMode } from '@/theme/settings';
 
 export default function ProfileTab() {
-  const { t, colors: c, themeMode, setThemeMode } = useSettings();
+  const { t, colors: c, themeMode, setThemeMode, setAppMode } = useSettings();
   const { profile, syncing, pendingCount, lastSync, syncNow, clearLocal } = useData();
   const { email, guest, signOut } = useAuth();
   if (!profile) return null;
@@ -75,6 +75,9 @@ export default function ProfileTab() {
         <ListItem icon="target" title={t('targets')} onPress={() => router.push('/targets')} />
         <ListItem icon="bell-ring" title={t('reminders')} onPress={() => router.push('/reminders')} />
         <ListItem icon="shield-lock-outline" title={t('privacy')} subtitle={t('privacy_sub')} onPress={() => router.push('/privacy')} />
+        {!guest && (
+          <ListItem icon="account-group" title={t('group_login')} subtitle={t('group_login_sub')} onPress={() => setAppMode('group')} />
+        )}
       </Card>
 
       <Card>

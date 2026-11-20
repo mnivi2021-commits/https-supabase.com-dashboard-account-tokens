@@ -29,7 +29,7 @@ export function daySummary(s: Pick<DataState, 'workouts' | 'steps' | 'sleeps' | 
     steps: percent(steps, s.targets.steps),
     minutes: percent(minutes, s.targets.workout_minutes),
     sleep: percent(sleep?.hours ?? 0, s.targets.sleep_hours),
-    water: percent(water, s.targets.water_glasses),
+    water: percent(water, s.targets.water_ml),
   };
   return {
     date,
@@ -79,7 +79,7 @@ export interface Badge {
 
 export function computeBadges(s: DataState): Badge[] {
   const longest = longestStreak(s.workouts);
-  const waterDays = Object.values(s.water).filter((g) => g >= s.targets.water_glasses).length;
+  const waterDays = Object.values(s.water).filter((ml) => ml >= s.targets.water_ml).length;
   const sleepDays = s.sleeps.filter((x) => x.hours >= s.targets.sleep_hours).length;
   const p = s.profile;
   const goalReached =

@@ -135,7 +135,7 @@ function DayView({ day }: { day: DaySummary }) {
     { label: t('steps'), pct: day.pct.steps, value: `${day.steps.toLocaleString()} / ${targets.steps.toLocaleString()}`, color: '#16A34A' },
     { label: t('workout'), pct: day.pct.minutes, value: `${day.minutes} / ${targets.workout_minutes} ${t('min')}`, color: '#F97316' },
     { label: t('sleep'), pct: day.pct.sleep, value: `${day.sleepHours} / ${targets.sleep_hours} ${t('hrs')}`, color: '#9333EA' },
-    { label: t('water'), pct: day.pct.water, value: `${day.water} / ${targets.water_glasses}`, color: '#0284C7' },
+    { label: t('water'), pct: day.pct.water, value: `${day.water} / ${targets.water_ml} ml`, color: '#0284C7' },
   ];
   return (
     <>

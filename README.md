@@ -12,16 +12,16 @@ Works in **English, தமிழ் and हिन्दी**, in light and dark 
 
 | Area | What it does |
 |---|---|
-| **Login** | Email + one-time code, Google sign-in, or "use without account" (offline only) |
-| **Profile & BMI** | 8-step onboarding (name, age, gender, height in cm or ft/in, weight, blood group, private photo, target weight + date) → BMI report with **Asian/Indian ranges**, colour gauge, ideal weight range, daily calories & water, diet / exercise / lifestyle tips, doctor disclaimer |
+| **Login** | Choose **My Login** (own health tracking) or **Group Login** (only your groups' member day reports). Email login link (or code, if your Supabase email template has one), Google sign-in, or "use without account" (offline only) |
+| **Profile & BMI** | 8-step onboarding (name, age, gender, height in cm or ft/in, weight, blood group, private photo, target weight + date) with **animated how-to-measure guides** for height, weight and the full-size photo → BMI report with **Asian/Indian ranges**, colour gauge, ideal weight range, daily calories & water, diet / exercise / lifestyle tips, doctor disclaimer |
 | **Workouts** | 10 workouts (walking, jogging, running, cycling, yoga, pull-ups, sit-ups, push-ups, squats, skipping). Time-based or reps × sets. Calories via the **MET formula** using your weight. **Live walk** mode with pedometer steps |
 | **Steps** | Automatic step counting with the phone pedometer (`expo-sensors`) |
 | **Sleep** | Bedtime + wake time → hours, quality 😴 / 😐 / 😫, 7-night chart, bedtime reminder |
-| **Water** | Glass counter with a daily target |
+| **Water** | Counted in **ml**: pick a glass size (100 / 200 / 250 ml), each tap adds one glass; daily target in ml |
 | **Reminders** | 1 or 2 workout reminders per day at your chosen times, bedtime reminder, weekly weigh-in reminder |
 | **Targets** | Daily steps / workout minutes / sleep / water, monthly weight-loss or gain goal, progress rings on Home |
 | **Reports** | Day, week (bar charts, totals, best day) and month (weight line chart, weight & BMI change, BMI history). 🔥 streaks and badges. **Export PDF** or **share as image** |
-| **Group** | Create a group → 6-digit invite code (share on WhatsApp) → up to 5 members. Dashboard with photo, name, weight, BMI, today's workout, steps, sleep and target %. Members choose what to share (photo is private by default). Admin can remove members. 👏 cheers, daily motivation, guidelines |
+| **Group** | Be in **several groups** (e.g. Family Group 1, Family Group 2, Friends Group). Create a group → 6-digit invite code (share on WhatsApp) → others send a **join request** → the **admin approves or rejects** → up to 5 members. Member cards show photo, name, weight, BMI and **Today vs Yesterday**: target achieved ✅/❌, water (ml), sleep, steps, workout. Members choose what to share (photo is private by default). Admin can remove members. 👏 cheers, daily motivation, guidelines |
 | **Monthly challenge** | Winner = highest **weight-change %** (not kg, so it is fair). Separate **Healthy Gain** category. 🏆 last-month winner card + 🥇🥈🥉 leaderboard. Group summary for day / week / month |
 | **Offline** | Everything is saved on the phone first (AsyncStorage) and uploaded to Supabase when online |
 
@@ -161,13 +161,13 @@ supabase/schema.sql       Tables, RLS, storage bucket, group functions
 ## Database
 
 Tables: `profiles`, `weight_logs`, `workouts`, `sleep_logs`, `water_logs`, `step_logs`, `targets`, `reminders`,
-`groups`, `group_members`, `cheers`.
+`groups`, `group_members`, `group_join_requests`, `cheers`.
 
 - **Row Level Security** is enabled on every table. Users read and write only their own rows.
 - Group members see each other **only** through the `get_group_dashboard`, `get_group_summary` and `get_group_challenge`
   functions, which hide every field a member chose not to share.
 - Photos are stored in a **private** bucket. A group mate can view a photo only when its owner turned on "Share my photo".
-- A trigger enforces **5 members per group**. Each user can be in one group at a time.
+- A trigger enforces **5 members per group**. A user can be in up to 10 groups. Joining needs the admin's approval (`request_join` → `respond_join_request`).
 
 ## Health formulas
 

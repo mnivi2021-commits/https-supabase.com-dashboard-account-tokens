@@ -39,9 +39,17 @@ npx expo export --platform android --output-dir <temp dir>   # full bundle check
 - **Day keys** are local `YYYY-MM-DD` strings (`src/lib/dates.ts`). Pass the client's `todayKey()` to RPCs; never rely on the server date.
 - **Steps** (`src/data/steps.tsx`): iOS reads `getStepCountAsync` (today's history); Android only has live
   `watchStepCount` deltas while the app is open. `walk.tsx` is a separate live session that is saved as a walking workout.
-- **Group** (`src/features/group/`): the client never reads group mates' tables directly. Everything goes through
-  SECURITY DEFINER SQL functions in `supabase/schema.sql` (`create_group`, `join_group`, `leave_group`, `remove_member`,
-  `get_group_dashboard`, `get_group_summary`, `get_group_challenge`) that apply each member's `profiles.share` settings.
+- **Group** (`src/features/group/`): users can be in several groups (max 10; 5 members each). Joining is a request the
+  admin approves (`request_join` → `list_join_requests` / `respond_join_request`). The client never reads group mates'
+  tables directly: SECURITY DEFINER functions that take `p_group_id` (`get_group_dashboard`, `get_group_summary`,
+  `get_group_challenge`, `leave_group`, `remove_member`, `set_my_category`) check `is_member` and apply each member's
+  `profiles.share` settings. `GroupsScreen` (group selector) is shared by the Group tab and `group-home`.
+- **App mode** (`useSettings().appMode`): `me` = normal tabs; `group` = "Group Login", routed to `src/app/group-home.tsx`
+  (member day reports only, needs a real session). Chosen on the login page; switchable from Profile / group-home.
+- **Water** is stored in **ml** (`water[date]`, `targets.water_ml`, `targets.glass_ml`). `migrate()` in store.tsx converts
+  old glass counts; `water_logs` keeps a legacy `glasses` column.
+- **Login on the free Supabase plan** uses the emailed magic link → `/auth-callback?code=` → `exchangeCodeForSession`
+  (the email template, and so a 6-digit code, needs custom SMTP).
   Business errors are raised as codes (`GROUP_FULL`, `INVALID_CODE`, …) and mapped to i18n keys in `groupErrorKey`.
 - **Photos**: stored locally (`photo_uri`, copied to the document dir) and uploaded to the private `avatars` bucket at
   `<uid>/profile.jpg` (`photo_path`). Group mates get signed URLs, and only if the owner shares their photo.

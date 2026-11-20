@@ -78,7 +78,7 @@ export function BmiReport({ profile }: { profile: ReportProfile }) {
         <Row>
           <Stat icon="fire" color="#F97316" label={t('daily_calories')} value={`${kcal} kcal`} />
           <Stat icon="cup-water" color={c.secondary} label={t('daily_water')} value={`${water.litres} L`} />
-          <Stat icon="cup" color={c.secondary} label={t('glasses')} value={`${water.glasses}`} />
+          <Stat icon="cup" color={c.secondary} label={t('glasses_200')} value={`${Math.ceil(water.ml / 200)}`} />
         </Row>
       </Card>
 

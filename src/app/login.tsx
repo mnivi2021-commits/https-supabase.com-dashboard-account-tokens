@@ -1,14 +1,14 @@
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, Pressable, View } from 'react-native';
 
 import { LanguagePicker } from '@/components/LanguagePicker';
 import { Button, Card, Field, Icon, Row, Screen, Txt } from '@/components/ui';
 import { useAuth } from '@/data/auth';
 import { isSupabaseConfigured } from '@/lib/env';
-import { useSettings } from '@/theme/settings';
+import { useSettings, type AppMode } from '@/theme/settings';
 
 export default function Login() {
-  const { colors: c, t } = useSettings();
+  const { colors: c, t, appMode, setAppMode } = useSettings();
   const { sendOtp, verifyOtp, signInWithGoogle, continueAsGuest } = useAuth();
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
@@ -53,6 +53,43 @@ export default function Login() {
         </View>
 
         <LanguagePicker />
+
+        <Row gap={12}>
+          {(
+            [
+              { mode: 'me', icon: 'heart-pulse', title: t('my_login'), sub: t('my_login_sub') },
+              { mode: 'group', icon: 'account-group', title: t('group_login'), sub: t('group_login_sub') },
+            ] as const
+          ).map((o) => {
+            const on = appMode === o.mode;
+            return (
+              <Pressable
+                key={o.mode}
+                accessibilityRole="button"
+                accessibilityState={{ selected: on }}
+                onPress={() => setAppMode(o.mode as AppMode)}
+                style={{
+                  flex: 1,
+                  alignItems: 'center',
+                  gap: 4,
+                  padding: 14,
+                  borderRadius: 18,
+                  borderWidth: 2,
+                  borderColor: on ? c.primary : c.border,
+                  backgroundColor: on ? c.primarySoft : c.card,
+                }}
+              >
+                <Icon name={o.icon} size={36} color={on ? c.primary : c.muted} />
+                <Txt bold size="large" center>
+                  {o.title}
+                </Txt>
+                <Txt muted size="small" center>
+                  {o.sub}
+                </Txt>
+              </Pressable>
+            );
+          })}
+        </Row>
 
         {!isSupabaseConfigured && (
           <Card style={{ borderColor: c.warning, backgroundColor: c.cardAlt }}>
@@ -126,10 +163,18 @@ export default function Login() {
           loading={busy === 'google'}
           onPress={() => run('google', signInWithGoogle)}
         />
-        <Button variant="outline" icon="cellphone" title={t('use_offline')} onPress={continueAsGuest} />
-        <Txt muted size="small" center>
-          {t('offline_note')}
-        </Txt>
+        {appMode === 'me' ? (
+          <>
+            <Button variant="outline" icon="cellphone" title={t('use_offline')} onPress={continueAsGuest} />
+            <Txt muted size="small" center>
+              {t('offline_note')}
+            </Txt>
+          </>
+        ) : (
+          <Txt muted size="small" center>
+            {t('group_login_note')}
+          </Txt>
+        )}
       </Screen>
     </KeyboardAvoidingView>
   );

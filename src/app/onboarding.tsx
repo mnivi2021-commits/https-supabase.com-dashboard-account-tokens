@@ -3,6 +3,7 @@ import { KeyboardAvoidingView, Platform, View } from 'react-native';
 
 import { BmiReport } from '@/components/BmiReport';
 import { LanguagePicker } from '@/components/LanguagePicker';
+import { MeasureGuide } from '@/components/MeasureGuide';
 import { BloodGroupPicker, GenderPicker, HeightInput, PhotoPicker } from '@/components/pickers';
 import { Button, Card, Chip, Field, ProgressBar, Row, Screen, Txt } from '@/components/ui';
 import { newId, useData } from '@/data/store';
@@ -80,7 +81,7 @@ export default function Onboarding() {
     const monthly = round1(Math.min(3, Math.abs(profileDraft.target_weight_kg - profileDraft.weight_kg) / months)) || 1;
     saveTargets({
       ...DEFAULT_TARGETS,
-      water_glasses: dailyWater(profileDraft.weight_kg).glasses,
+      water_ml: dailyWater(profileDraft.weight_kg).ml,
       monthly_weight_change_kg: monthly,
     });
     // Weekly weight check-in (Sunday 8:00 AM) feeds the BMI history chart.
@@ -139,6 +140,8 @@ export default function Onboarding() {
             <Field label={t('weight_kg')} keyboardType="decimal-pad" value={weight} onChangeText={setWeight} placeholder="65" autoFocus />
           </Card>
         )}
+        {step === 3 && <MeasureGuide kind="height" />}
+        {step === 4 && <MeasureGuide kind="weight" />}
         {step === 5 && <BloodGroupPicker value={blood} onChange={setBlood} />}
         {step === 6 && (
           <Card>
@@ -148,6 +151,7 @@ export default function Onboarding() {
             <PhotoPicker uri={photo} onChange={setPhoto} />
           </Card>
         )}
+        {step === 6 && <MeasureGuide kind="photo" />}
         {step === 7 && (
           <Card>
             <Txt muted style={{ marginBottom: 10 }}>

@@ -14,9 +14,10 @@ import { AppState } from 'react-native';
 
 import { todayKey } from '@/lib/dates';
 import { isSupabaseConfigured } from '@/lib/env';
-import { calcBmi, estimateCalories } from '@/lib/health';
+import { calcBmi, estimateCalories, waterToMl } from '@/lib/health';
 import { scheduleReminders } from '@/lib/notifications';
 import {
+  DEFAULT_SHARE,
   DEFAULT_TARGETS,
   type Profile,
   type Reminder,
@@ -68,7 +69,8 @@ interface DataValue extends DataState {
   addWorkout: (w: NewWorkout) => Workout;
   deleteWorkout: (id: string) => void;
   saveSleep: (s: Omit<SleepLog, 'id'> & { id?: string }) => void;
-  setWater: (date: string, glasses: number) => void;
+  /** Sets the day's water intake in millilitres. */
+  setWater: (date: string, ml: number) => void;
   setStepsAtLeast: (date: string, steps: number) => void;
   addSteps: (date: string, delta: number) => void;
   saveTargets: (t: Targets) => void;
@@ -80,6 +82,24 @@ interface DataValue extends DataState {
 const DataContext = createContext<DataValue | null>(null);
 
 export const newId = () => Crypto.randomUUID();
+
+/** water_logs keeps a legacy `glasses` column (250 ml each) next to `ml`. */
+const waterRow = (date: string, ml: number) => ({ date, ml, glasses: Math.min(30, Math.round(ml / 250)) });
+
+/** Upgrades cached data from older app versions (water used to be counted in glasses). */
+function migrate(s: DataState): DataState {
+  const t = s.targets as Targets & { water_glasses?: number };
+  const targets: Targets = {
+    ...DEFAULT_TARGETS,
+    ...t,
+    water_ml: t.water_ml ?? (t.water_glasses ? t.water_glasses * 250 : DEFAULT_TARGETS.water_ml),
+    glass_ml: t.glass_ml ?? DEFAULT_TARGETS.glass_ml,
+  };
+  delete (targets as { water_glasses?: number }).water_glasses;
+  const water = Object.fromEntries(Object.entries(s.water).map(([d, v]) => [d, waterToMl(v)]));
+  const profile = s.profile ? { ...s.profile, share: { ...DEFAULT_SHARE, ...s.profile.share } } : null;
+  return { ...s, targets, water, profile };
+}
 
 function mergeRemote(local: DataState, remote: RemoteData, queue: SyncOp[]): DataState {
   const pending = (table: string) => {
@@ -230,7 +250,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       try {
         const [raw, rawQueue] = await Promise.all([AsyncStorage.getItem(DATA_KEY), AsyncStorage.getItem(QUEUE_KEY)]);
         if (raw) {
-          const parsed = { ...EMPTY, ...(JSON.parse(raw) as Partial<DataState>) };
+          const parsed = migrate({ ...EMPTY, ...(JSON.parse(raw) as Partial<DataState>) });
           stateRef.current = parsed;
           setState(parsed);
         }
@@ -306,7 +326,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     for (const w of s.workouts) ops.push(upsertOp('workouts', { ...w }, w.id));
     for (const x of s.sleeps) ops.push(upsertOp('sleep_logs', { ...x }, x.id));
     for (const x of s.weights) ops.push(upsertOp('weight_logs', { ...x }, x.id));
-    for (const [date, glasses] of Object.entries(s.water)) ops.push(upsertOp('water_logs', { date, glasses }, date));
+    for (const [date, ml] of Object.entries(s.water)) ops.push(upsertOp('water_logs', waterRow(date, ml), date));
     for (const [date, steps] of Object.entries(s.steps)) ops.push(upsertOp('step_logs', { date, steps }, date));
     ops.push(upsertOp('targets', { ...s.targets }, 'me'));
     for (const r of s.reminders) ops.push(upsertOp('reminders', { ...r }, r.id));
@@ -404,10 +424,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
   );
 
   const setWater = useCallback<DataValue['setWater']>(
-    (date, glasses) => {
+    (date, ml) => {
       const s = stateRef.current;
-      const g = Math.max(0, Math.min(30, glasses));
-      commit({ ...s, water: { ...s.water, [date]: g } }, [upsertOp('water_logs', { date, glasses: g }, date)]);
+      const v = Math.max(0, Math.min(7000, Math.round(ml)));
+      commit({ ...s, water: { ...s.water, [date]: v } }, [upsertOp('water_logs', waterRow(date, v), date)]);
     },
     [commit],
   );

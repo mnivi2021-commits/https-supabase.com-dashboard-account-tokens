@@ -53,10 +53,15 @@ export function dailyCalories(p: Pick<Profile, 'weight_kg' | 'height_cm' | 'age'
   return Math.max(1200, Math.round((maintenance + adjust[p.goal_type]) / 10) * 10);
 }
 
-/** ~35 ml per kg body weight. Returns litres and 250 ml glasses. */
-export function dailyWater(weightKg: number): { litres: number; glasses: number } {
-  const litres = round1(weightKg * 0.035);
-  return { litres, glasses: Math.max(8, Math.ceil(litres / 0.25)) };
+/** ~35 ml per kg body weight, rounded to 100 ml (minimum 1.5 L). */
+export function dailyWater(weightKg: number): { litres: number; ml: number } {
+  const ml = Math.max(1500, Math.round((weightKg * 35) / 100) * 100);
+  return { litres: ml / 1000, ml };
+}
+
+/** Old data stored water as glasses (≤ 30); new data stores millilitres. */
+export function waterToMl(value: number): number {
+  return value > 0 && value <= 30 ? value * 250 : value;
 }
 
 export function goalTypeFor(weightKg: number, targetKg: number): GoalType {

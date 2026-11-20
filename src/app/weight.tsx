@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Alert, useWindowDimensions, View } from 'react-native';
 import { LineChart } from 'react-native-gifted-charts';
 
+import { MeasureGuide } from '@/components/MeasureGuide';
 import { Button, Card, Field, Icon, ListItem, Screen, SectionTitle, Txt } from '@/components/ui';
 import { useData } from '@/data/store';
 import { BMI_COLORS, bmiCategory, calcBmi, round1 } from '@/lib/health';
@@ -39,6 +40,8 @@ export default function WeightScreen() {
         </View>
         <Button title={t('save')} icon="check-circle" disabled={!valid} onPress={save} />
       </Card>
+
+      <MeasureGuide kind="weight" />
 
       {history.length > 1 && (
         <Card>
