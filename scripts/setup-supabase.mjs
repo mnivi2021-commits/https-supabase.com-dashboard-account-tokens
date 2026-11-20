@@ -156,7 +156,16 @@ async function main() {
       external_google_secret: env.GOOGLE_CLIENT_SECRET,
     });
   }
-  await api('PATCH', `/v1/projects/${ref}/config/auth`, auth);
+  try {
+    await api('PATCH', `/v1/projects/${ref}/config/auth`, auth);
+  } catch (e) {
+    // Free plan + default email sender: templates are locked. The app then uses the login link instead.
+    if (!String(e.message).includes('entitlement_required')) throw e;
+    delete auth.mailer_subjects_magic_link;
+    delete auth.mailer_templates_magic_link_content;
+    await api('PATCH', `/v1/projects/${ref}/config/auth`, auth);
+    console.log('  ! Free plan: email template is locked, so login uses the emailed link (tap it on the phone).');
+  }
   console.log(`  ✓ Auth configured${auth.external_google_enabled ? ' (Google enabled)' : ' (Google: skipped — no GOOGLE_CLIENT_ID/SECRET)'}`);
 
   // ---- 5. Keys → .env ----

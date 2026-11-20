@@ -45,7 +45,9 @@ const en = {
   // Login
   email: 'Email',
   send_code: 'Send login code',
-  code_sent: 'We sent a code to {email}. Check your inbox.',
+  code_sent: 'We emailed {email}. On this phone, open the email and tap the login link — or type the code if the email has one.',
+  login_failed: 'Login failed',
+  open_link_same_phone: 'Open the email link on the same phone where you asked for it.',
   enter_code: 'Enter the code',
   verify: 'Verify & sign in',
   change_email: 'Use a different email',

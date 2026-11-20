@@ -63,7 +63,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const sendOtp = useCallback(async (email: string) => {
     const { error } = await supabase.auth.signInWithOtp({
       email: email.trim().toLowerCase(),
-      options: { shouldCreateUser: true },
+      // The email has a code (custom template) or, on the free default sender, a link
+      // that reopens the app at /auth-callback?code=… on this phone.
+      options: { shouldCreateUser: true, emailRedirectTo: Linking.createURL('auth-callback') },
     });
     if (error) throw error;
   }, []);
