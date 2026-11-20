@@ -66,6 +66,7 @@ function Gate() {
           <Stack.Screen name="bmi-report" options={{ headerShown: false }} />
           <Stack.Screen name="log-workout" options={{ title: t('log_workout'), presentation: 'modal' }} />
           <Stack.Screen name="walk" options={{ title: t('live_walk') }} />
+          <Stack.Screen name="workout-report" options={{ headerShown: false }} />
           <Stack.Screen name="weight" options={{ title: t('update_weight') }} />
           <Stack.Screen name="edit-profile" options={{ headerShown: false }} />
           <Stack.Screen name="targets" options={{ title: t('targets') }} />

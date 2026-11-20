@@ -99,17 +99,21 @@ export interface WorkoutMeta {
   color: string;
 }
 
+// Order follows the Workout Track design.
 export const WORKOUTS: WorkoutMeta[] = [
   { type: 'walking', icon: 'walk', kind: 'time', met: 3.5, hasDistance: true, color: '#16A34A' },
-  { type: 'jogging', icon: 'run', kind: 'time', met: 7.0, hasDistance: true, color: '#0EA5E9' },
+  { type: 'jumping_jacks', icon: 'human-handsup', kind: 'count', met: 8.0, secPerRep: 1.5, color: '#2563EB' },
+  { type: 'skipping', icon: 'jump-rope', kind: 'time', met: 12.3, color: '#EA580C' },
+  { type: 'situps', icon: 'seat-recline-normal', kind: 'count', met: 3.8, secPerRep: 3, color: '#7C3AED' },
+  { type: 'pullups', icon: 'arm-flex', kind: 'count', met: 8.0, secPerRep: 4, color: '#DC2626' },
+  { type: 'pushups', icon: 'weight-lifter', kind: 'count', met: 8.0, secPerRep: 3, color: '#0284C7' },
+  { type: 'squats', icon: 'human', kind: 'count', met: 5.0, secPerRep: 3, color: '#16A34A' },
+  { type: 'plank', icon: 'gymnastics', kind: 'time', met: 3.8, color: '#9333EA' },
+  { type: 'cycling', icon: 'bike', kind: 'time', met: 7.5, hasDistance: true, color: '#CA8A04' },
   { type: 'running', icon: 'run-fast', kind: 'time', met: 9.8, hasDistance: true, color: '#2563EB' },
-  { type: 'cycling', icon: 'bike', kind: 'time', met: 7.5, hasDistance: true, color: '#0891B2' },
-  { type: 'yoga', icon: 'meditation', kind: 'time', met: 2.5, color: '#9333EA' },
-  { type: 'pullups', icon: 'arm-flex', kind: 'count', met: 8.0, secPerRep: 4, color: '#EA580C' },
-  { type: 'situps', icon: 'human-handsup', kind: 'count', met: 3.8, secPerRep: 3, color: '#DB2777' },
-  { type: 'pushups', icon: 'weight-lifter', kind: 'count', met: 8.0, secPerRep: 3, color: '#DC2626' },
-  { type: 'squats', icon: 'human', kind: 'count', met: 5.0, secPerRep: 3, color: '#CA8A04' },
-  { type: 'skipping', icon: 'jump-rope', kind: 'time', met: 12.3, color: '#059669' },
+  { type: 'yoga', icon: 'meditation', kind: 'time', met: 2.5, color: '#DB2777' },
+  { type: 'stretching', icon: 'yoga', kind: 'time', met: 2.3, color: '#0D9488' },
+  { type: 'jogging', icon: 'run', kind: 'time', met: 7.0, hasDistance: true, color: '#0EA5E9' },
 ];
 
 export function workoutMeta(type: WorkoutType): WorkoutMeta {

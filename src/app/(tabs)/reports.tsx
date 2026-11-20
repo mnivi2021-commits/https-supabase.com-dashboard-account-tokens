@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { useMemo, useRef, useState } from 'react';
 import { Alert, useWindowDimensions, View } from 'react-native';
@@ -92,6 +93,8 @@ export default function Reports() {
         value={period}
         onChange={setPeriod}
       />
+
+      <Button variant="outline" icon="chart-bar" title={t('workout_report')} onPress={() => router.push('/workout-report')} />
 
       <View ref={shotRef} collapsable={false} style={{ gap: 14, backgroundColor: c.bg }}>
         {period === 'day' ? <DayView day={days[0]} /> : <RangeView days={days} period={period} weight={weight} />}

@@ -55,6 +55,11 @@ create table if not exists public.workouts (
   created_at  timestamptz not null default now()
 );
 create index if not exists workouts_user_date on public.workouts (user_id, date);
+-- Allowed workout types (kept in sync with WORKOUT_TYPES in src/lib/types.ts).
+alter table public.workouts drop constraint if exists workouts_type_check;
+alter table public.workouts add constraint workouts_type_check check (type in (
+  'walking','jogging','running','cycling','yoga','pullups','situps','pushups','squats','skipping',
+  'jumping_jacks','plank','stretching'));
 
 -- Food eaten. Nutrition values are for the whole entry (serving × qty).
 create table if not exists public.food_logs (

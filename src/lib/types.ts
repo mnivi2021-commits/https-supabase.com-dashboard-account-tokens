@@ -64,6 +64,9 @@ export const WORKOUT_TYPES = [
   'pushups',
   'squats',
   'skipping',
+  'jumping_jacks',
+  'plank',
+  'stretching',
 ] as const;
 export type WorkoutType = (typeof WORKOUT_TYPES)[number];
 
