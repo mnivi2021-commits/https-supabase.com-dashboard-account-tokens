@@ -72,6 +72,15 @@ async function main() {
   // ---- 1. Project ----
   let ref = env.SUPABASE_PROJECT_REF;
   if (!ref) {
+    // Reuse a project the user already made (free plan allows only 2), e.g. "Health Tracker".
+    const projects = await api('GET', '/v1/projects').catch(() => []);
+    const existing = (projects ?? []).find((p) => /heal/i.test(p.name ?? ''));
+    if (existing) {
+      ref = existing.ref ?? existing.id;
+      writeEnv({ SUPABASE_PROJECT_REF: ref });
+    }
+  }
+  if (!ref) {
     const orgs = await api('GET', '/v1/organizations');
     if (!orgs?.length) throw new Error('No Supabase organization found. Open the dashboard once to create one.');
     const org = orgs.find((o) => o.slug === env.SUPABASE_ORG) ?? orgs[0];
