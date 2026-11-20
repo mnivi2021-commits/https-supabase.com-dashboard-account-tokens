@@ -1,0 +1,77 @@
+{
+  "expo": {
+    "name": "Health Tracker",
+    "slug": "health-tracker",
+    "scheme": "healthtracker",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.healthtracker.app",
+      "infoPlist": {
+        "NSMotionUsageDescription": "Health Tracker counts your steps to show daily walking progress.",
+        "NSCameraUsageDescription": "Health Tracker uses the camera to take your profile photo.",
+        "NSPhotoLibraryUsageDescription": "Health Tracker lets you choose a profile photo from your gallery."
+      }
+    },
+    "android": {
+      "package": "com.healthtracker.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#E8F7EF",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "permissions": [
+        "android.permission.ACTIVITY_RECOGNITION"
+      ],
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-web-browser",
+      "expo-sharing",
+      "@react-native-community/datetimepicker",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Health Tracker lets you choose a profile photo from your gallery.",
+          "cameraPermission": "Health Tracker uses the camera to take your profile photo."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#16A34A"
+        }
+      ],
+      [
+        "expo-sensors",
+        {
+          "motionPermission": "Health Tracker counts your steps to show daily walking progress."
+        }
+      ],
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#E8F7EF",
+          "dark": {
+            "backgroundColor": "#0A1511"
+          }
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": false
+    }
+  }
+}
