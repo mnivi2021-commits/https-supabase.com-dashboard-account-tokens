@@ -52,6 +52,13 @@ export function FoodCard() {
         />
         <Button style={{ flex: 1 }} variant="outline" icon="silverware-fork-knife" title={t('see_all')} onPress={() => router.push('/food')} />
       </Row>
+      <Button
+        style={{ marginTop: 10 }}
+        variant="secondary"
+        icon="food-apple"
+        title={t('nutrition_plan_btn')}
+        onPress={() => router.push('/nutrition')}
+      />
     </Card>
   );
 }

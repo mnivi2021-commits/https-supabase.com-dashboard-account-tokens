@@ -16,6 +16,7 @@ export default function BmiReportScreen() {
       <AppHeader />
       <WaveBanner title={t('my_health_report')} subtitle={t('my_health_report_sub')} icon="clipboard-pulse-outline" />
       <BmiReport profile={profile} />
+      <Button variant="secondary" icon="food-apple" title={t('nutrition_plan_btn')} onPress={() => router.push('/nutrition')} />
       <Row gap={10}>
         <Button style={{ flex: 1 }} variant="outline" icon="pencil" title={t('edit_profile')} onPress={() => router.push('/edit-profile')} />
         <Button style={{ flex: 1 }} icon="scale-bathroom" title={t('update_weight')} onPress={() => router.push('/weight')} />
