@@ -39,7 +39,7 @@ export default function GroupHome() {
         </View>
       </Row>
       <Row gap={10}>
-        <Button style={{ flex: 1 }} small variant="outline" icon="heart-pulse" title={t('my_health')} onPress={() => setAppMode('me')} />
+        <Button style={{ flex: 1 }} small variant="outline" icon="arrow-left" title={t('my_health')} onPress={() => setAppMode('me')} />
         <Button style={{ flex: 1 }} small variant="ghost" icon="logout" title={t('sign_out')} onPress={onSignOut} />
       </Row>
     </View>

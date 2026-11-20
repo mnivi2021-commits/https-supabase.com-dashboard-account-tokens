@@ -5,6 +5,7 @@ import { BarChart, LineChart } from 'react-native-gifted-charts';
 import { captureRef } from 'react-native-view-shot';
 
 import { Button, Card, Icon, ProgressBar, Row, Screen, SectionTitle, Segmented, Stat, Txt } from '@/components/ui';
+import { SyncRefresh } from '@/components/SyncRefresh';
 import { useData } from '@/data/store';
 import type { TKey } from '@/i18n';
 import { lastNDays, monthDays, monthStartKey, todayKey, weekdayIndex } from '@/lib/dates';
@@ -81,7 +82,7 @@ export default function Reports() {
   };
 
   return (
-    <Screen>
+    <Screen refreshControl={<SyncRefresh />}>
       <Segmented
         options={[
           { value: 'day', label: t('day') },

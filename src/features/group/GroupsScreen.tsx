@@ -96,6 +96,12 @@ export function GroupsScreen({
   return (
     <Screen edges={edges} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={c.primary} />}>
       {header}
+      <Row style={{ justifyContent: 'space-between' }}>
+        <Txt muted size="small" style={{ flex: 1 }}>
+          {t('pull_to_refresh')}
+        </Txt>
+        <Button small variant="outline" icon="refresh" title={t('refresh')} loading={refreshing} onPress={refresh} />
+      </Row>
       {error && (
         <Card style={{ borderColor: c.danger }}>
           <Row gap={8}>

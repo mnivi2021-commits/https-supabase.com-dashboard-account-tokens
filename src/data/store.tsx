@@ -333,6 +333,26 @@ export function DataProvider({ children }: { children: ReactNode }) {
     enqueueRaw(ops);
   }
 
+  /** Pull-to-refresh / "Sync now": upload pending changes, then reload this user's data from the cloud. */
+  const refreshAll = useCallback(async () => {
+    await flush();
+    const uid = userIdRef.current;
+    if (!uid || !isSupabaseConfigured) return;
+    setSyncing(true);
+    try {
+      const remote = await pullAll(uid);
+      const merged = mergeRemote(stateRef.current, remote, queueRef.current);
+      stateRef.current = merged;
+      setState(merged);
+      persistState();
+      setLastSync(new Date().toISOString());
+    } catch (e) {
+      console.warn('[data] refresh failed (offline?)', e);
+    } finally {
+      setSyncing(false);
+    }
+  }, [flush, persistState]);
+
   // Retry the queue whenever the app comes back to the foreground.
   useEffect(() => {
     const sub = AppState.addEventListener('change', (s) => {
@@ -492,7 +512,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       addSteps,
       saveTargets,
       saveReminders,
-      syncNow: flush,
+      syncNow: refreshAll,
       clearLocal,
     }),
     [
@@ -511,7 +531,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       addSteps,
       saveTargets,
       saveReminders,
-      flush,
+      refreshAll,
       clearLocal,
     ],
   );

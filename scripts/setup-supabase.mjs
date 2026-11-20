@@ -12,6 +12,7 @@
 
 import { randomBytes } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { networkInterfaces } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -146,7 +147,16 @@ async function main() {
   console.log('• Configuring login (6-digit email code, redirect URLs)…');
   const auth = {
     site_url: 'healthtracker://',
-    uri_allow_list: 'exp://**,healthtracker://**',
+    // Expo Go opens links like exp://192.168.1.5:8081/--/auth-callback, so allow this PC's
+    // own network addresses explicitly as well as the generic patterns.
+    uri_allow_list: [
+      'exp://**',
+      'healthtracker://**',
+      ...Object.values(networkInterfaces())
+        .flat()
+        .filter((i) => i && i.family === 'IPv4' && !i.internal)
+        .flatMap((i) => [`exp://${i.address}:8081/**`, `exp://${i.address}:8082/**`]),
+    ].join(','),
     mailer_otp_length: 6,
     mailer_subjects_magic_link: 'Your Health Tracker login code',
     mailer_templates_magic_link_content:

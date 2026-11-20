@@ -5,7 +5,7 @@ import { Alert, Image, Pressable, Share, View } from 'react-native';
 import { Button, Card, Row, SectionTitle, Segmented, Txt } from '@/components/ui';
 import { signedPhotoUrls } from '@/data/sync';
 import type { TKey } from '@/i18n';
-import { addDays, dayOfYear, lastNDays, monthDays, monthStartKey, prevMonthStartKey, todayKey } from '@/lib/dates';
+import { addDays, dayOfYear, lastNDays, monthDays, monthStartKey, prevMonthStartKey, todayKey, weekdayIndex } from '@/lib/dates';
 import { BMI_COLORS, bmiCategory } from '@/lib/health';
 import type { GroupCategory } from '@/lib/types';
 import { useSettings } from '@/theme/settings';
@@ -57,13 +57,22 @@ export function GroupView({
   const [period, setPeriod] = useState<'day' | 'week' | 'month'>('week');
   const [summary, setSummary] = useState<SummaryRow[]>([]);
   const [error, setError] = useState<string | null>(null);
+  /** The day shown in the member cards; ◀ ▶ move it back and forward. */
+  const [day, setDay] = useState(todayKey());
   const isAdmin = group.admin_id === userId;
   const me = today.find((r) => r.user_id === userId);
+  const prevDay = addDays(day, -1);
+  const isToday = day >= todayKey();
+
+  const dayLabel = (key: string) => {
+    if (key === todayKey()) return t('today');
+    if (key === addDays(todayKey(), -1)) return t('yesterday');
+    return `${t(`wd_${weekdayIndex(key)}` as TKey)} ${Number(key.slice(8))}/${Number(key.slice(5, 7))}`;
+  };
 
   const load = useCallback(async () => {
     try {
       setError(null);
-      const day = todayKey();
       const [d, y] = await Promise.all([fetchDashboard(group.id, day), fetchDashboard(group.id, addDays(day, -1))]);
       setToday(d);
       setYesterday(y);
@@ -80,7 +89,7 @@ export function GroupView({
     } catch (e) {
       setError(String((e as Error).message ?? e));
     }
-  }, [group.id, isAdmin, compact]);
+  }, [group.id, isAdmin, compact, day]);
 
   const loadSummary = useCallback(async () => {
     if (compact) return;
@@ -254,9 +263,39 @@ export function GroupView({
       <Txt size="large" bold>
         {t('member_day_report')}
       </Txt>
+      <Row gap={10}>
+        <Button
+          small
+          variant="outline"
+          icon="chevron-left"
+          title={t('prev_day')}
+          onPress={() => setDay(prevDay)}
+        />
+        <View style={{ flex: 1, alignItems: 'center' }}>
+          <Txt bold size="large" center>
+            {dayLabel(day)}
+          </Txt>
+          <Txt muted size="small" center>
+            {day}
+          </Txt>
+        </View>
+        <Button
+          small
+          variant="outline"
+          icon="chevron-right"
+          title={t('next_day')}
+          disabled={isToday}
+          onPress={() => setDay(addDays(day, 1))}
+        />
+      </Row>
+      {!isToday && (
+        <Button small variant="ghost" icon="calendar-today" title={t('back_to_today')} onPress={() => setDay(todayKey())} />
+      )}
       {today.map((r) => (
         <MemberCard
           key={r.user_id}
+          dayLabel={dayLabel(day)}
+          prevLabel={dayLabel(prevDay)}
           today={r}
           yesterday={yesterday.find((y) => y.user_id === r.user_id)}
           photo={r.photo_path ? photos[r.photo_path] : null}
@@ -323,6 +362,8 @@ export function GroupView({
 
 /** One member's day report: Today vs Yesterday. */
 function MemberCard({
+  dayLabel,
+  prevLabel,
   today: r,
   yesterday: y,
   photo,
@@ -331,6 +372,8 @@ function MemberCard({
   onCheer,
   onRemove,
 }: {
+  dayLabel: string;
+  prevLabel: string;
   today: DashboardRow;
   yesterday?: DashboardRow;
   photo: string | null;
@@ -437,12 +480,12 @@ function MemberCard({
           <View style={{ flex: 1.1 }} />
           <View style={{ flex: 1 }}>
             <Txt bold center>
-              {t('today')}
+              {dayLabel}
             </Txt>
           </View>
           <View style={{ flex: 1 }}>
             <Txt bold muted center>
-              {t('yesterday')}
+              {prevLabel}
             </Txt>
           </View>
         </Row>

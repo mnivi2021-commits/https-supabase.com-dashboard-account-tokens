@@ -4,6 +4,7 @@ import { Pressable, View } from 'react-native';
 import { Avatar } from '@/components/pickers';
 import { ProgressRing } from '@/components/ProgressRing';
 import { Button, Card, Chip, Icon, ProgressBar, Row, Screen, SectionTitle, Stat, Txt } from '@/components/ui';
+import { SyncRefresh } from '@/components/SyncRefresh';
 import { useStepsStatus } from '@/data/steps';
 import { useData } from '@/data/store';
 import type { TKey } from '@/i18n';
@@ -28,7 +29,7 @@ export default function Home() {
   const motivation = t(`motivation_${dayOfYear() % 10}` as TKey);
 
   return (
-    <Screen>
+    <Screen refreshControl={<SyncRefresh />}>
       <Row gap={12}>
         <Avatar uri={p.photo_uri} name={p.name} size={60} />
         <View style={{ flex: 1 }}>

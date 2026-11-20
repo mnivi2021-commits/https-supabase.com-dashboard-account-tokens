@@ -4,6 +4,7 @@ import { Alert, View } from 'react-native';
 import { LanguagePicker } from '@/components/LanguagePicker';
 import { Avatar } from '@/components/pickers';
 import { Button, Card, Icon, ListItem, Row, Screen, SectionTitle, Segmented, Txt } from '@/components/ui';
+import { SyncRefresh } from '@/components/SyncRefresh';
 import { useAuth } from '@/data/auth';
 import { useData } from '@/data/store';
 import { isSupabaseConfigured } from '@/lib/env';
@@ -47,7 +48,7 @@ export default function ProfileTab() {
   ];
 
   return (
-    <Screen>
+    <Screen refreshControl={<SyncRefresh />}>
       <Card style={{ alignItems: 'center' }}>
         <Avatar uri={p.photo_uri} name={p.name} size={96} />
         <Txt size="title" bold style={{ marginTop: 8 }}>

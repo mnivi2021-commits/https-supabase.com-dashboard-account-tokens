@@ -398,6 +398,11 @@ const en = {
   guide_weight_tips: "Weigh in the morning, after the toilet and before breakfast\nWear light clothes and no shoes\nPut the scale on a hard, flat floor and stand still\nUse the same scale every time",
   guide_photo_title: "How to take your full-size photo",
   guide_photo_tips: "Ask someone to hold the phone at chest height, 2–3 metres away\nYour whole body, head to feet, must fit in the frame\nStand straight against a plain wall with good light\nArms relaxed by your sides; wear fitted clothes",
+  prev_day: "Back",
+  next_day: "Next",
+  back_to_today: "Go to today",
+  refresh: "Refresh",
+  pull_to_refresh: "Pull down or tap Refresh to update",
 };
 
 export default en;
