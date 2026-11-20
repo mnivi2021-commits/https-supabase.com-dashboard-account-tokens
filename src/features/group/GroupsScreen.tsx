@@ -1,26 +1,27 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { RefreshControl, ScrollView } from 'react-native';
+import { RefreshControl } from 'react-native';
 
-import { Button, Card, Chip, Icon, Loading, Row, Screen, Txt } from '@/components/ui';
+import { AppHeader } from '@/components/AppHeader';
+import { Button, Card, Icon, Loading, Row, Screen, Txt } from '@/components/ui';
+import { BRAND } from '@/components/WelcomeArt';
+import { TitleTile } from '@/components/WorkoutUi';
 import { useAuth } from '@/data/auth';
 import { useData } from '@/data/store';
 import { isSupabaseConfigured } from '@/lib/env';
 import { useSettings } from '@/theme/settings';
-import { fetchMyGroups, fetchMyRequests, type Group, type MyRequest } from './api';
-import { GroupView } from './GroupView';
-import { NoGroup } from './NoGroup';
-
-const ADD = '__add__';
+import { fetchMyRequests, myGroups, type MyGroup, type MyRequest } from './api';
+import { AccessButton, CreatePanel, FindPanel, JoinPanel, MyGroupsList, PendingRequests, type AccessMode } from './GroupAccess';
+import { GroupDetail } from './GroupDetail';
 
 /**
- * All my groups (Family Group 1, Family Group 2, Friends Group …) with a selector on top.
- * Used by the Group tab and by the "Group Login" home (compact = member day reports only).
+ * "Group Access" (design): join / create / find groups and the list of my groups;
+ * opening a group shows its page. Used by the Group tab and by Group Login (compact).
  */
 export function GroupsScreen({
   compact = false,
   initialCode,
   header,
-  edges,
+  edges = ['top', 'left', 'right'],
 }: {
   compact?: boolean;
   initialCode?: string;
@@ -30,37 +31,32 @@ export function GroupsScreen({
   const { t, colors: c } = useSettings();
   const { userId, guest, signOut } = useAuth();
   const { profile } = useData();
-  const [groups, setGroups] = useState<Group[] | undefined>(undefined);
+  const [groups, setGroups] = useState<MyGroup[] | undefined>(undefined);
   const [requests, setRequests] = useState<MyRequest[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
+  const [mode, setMode] = useState<AccessMode>(initialCode ? 'join' : 'home');
+  const [justJoined, setJustJoined] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const category = profile?.goal_type === 'gain' ? 'gain' : 'loss';
 
-  const load = useCallback(
-    async (select?: string) => {
-      if (!userId || !isSupabaseConfigured) return;
-      try {
-        setError(null);
-        const [g, r] = await Promise.all([fetchMyGroups(), fetchMyRequests().catch(() => [])]);
-        setGroups(g);
-        setRequests(r);
-        setSelected((cur) => {
-          if (select) return select;
-          if (cur && (cur === ADD || g.some((x) => x.id === cur))) return cur;
-          return g[0]?.id ?? ADD;
-        });
-      } catch (e) {
-        setError(String((e as Error).message ?? e));
-        setGroups((g) => g ?? []);
-      }
-    },
-    [userId],
-  );
+  const load = useCallback(async () => {
+    if (!userId || !isSupabaseConfigured) return;
+    try {
+      setError(null);
+      const [g, r] = await Promise.all([myGroups(), fetchMyRequests().catch(() => [])]);
+      setGroups(g);
+      setRequests(r);
+    } catch (e) {
+      setError(String((e as Error).message ?? e));
+      setGroups((g) => g ?? []);
+    }
+  }, [userId]);
 
   useEffect(() => {
-    void load(initialCode ? ADD : undefined);
-  }, [load, initialCode]);
+    void load();
+  }, [load]);
 
   const refresh = async () => {
     setRefreshing(true);
@@ -69,10 +65,23 @@ export function GroupsScreen({
     setRefreshing(false);
   };
 
+  const openGroup = (id: string, joined = false) => {
+    setSelected(id);
+    setJustJoined(joined ? id : null);
+    setMode('home');
+    void load();
+  };
+
+  const top = header ?? (
+    <>
+      <AppHeader onBack={selected ? () => setSelected(null) : mode !== 'home' ? () => setMode('home') : null} />
+    </>
+  );
+
   if (!userId || !isSupabaseConfigured) {
     return (
       <Screen edges={edges}>
-        {header}
+        {top}
         <Card style={{ alignItems: 'center', gap: 10 }}>
           <Icon name="account-group" size={64} color={c.secondary} />
           <Txt size="title" bold center>
@@ -90,55 +99,77 @@ export function GroupsScreen({
   }
 
   if (groups === undefined) return <Loading />;
-
   const group = groups.find((g) => g.id === selected);
 
   return (
     <Screen edges={edges} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={c.primary} />}>
-      {header}
+      {top}
       <Row style={{ justifyContent: 'space-between' }}>
-        <Txt muted size="small" style={{ flex: 1 }}>
-          {t('pull_to_refresh')}
-        </Txt>
+        {group || mode !== 'home' ? (
+          <Button
+            small
+            variant="outline"
+            icon="arrow-left"
+            title={t('my_groups')}
+            onPress={() => {
+              setSelected(null);
+              setMode('home');
+            }}
+          />
+        ) : (
+          <Txt muted size="small" style={{ flex: 1 }}>
+            {t('pull_to_refresh')}
+          </Txt>
+        )}
         <Button small variant="outline" icon="refresh" title={t('refresh')} loading={refreshing} onPress={refresh} />
       </Row>
+
       {error && (
         <Card style={{ borderColor: c.danger }}>
-          <Row gap={8}>
-            <Icon name="cloud-off-outline" color={c.danger} />
-            <Txt style={{ flex: 1 }}>{t('group_load_error')}</Txt>
-          </Row>
-          <Button small variant="outline" icon="refresh" title={t('retry')} onPress={refresh} style={{ marginTop: 8 }} />
+          <Txt color={c.danger}>{t('group_load_error')}</Txt>
         </Card>
       )}
 
-      {groups.length > 0 && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-          {groups.map((g) => (
-            <Chip key={g.id} label={g.name} selected={selected === g.id} onPress={() => setSelected(g.id)} />
-          ))}
-          <Chip label={`＋ ${t('add_group')}`} selected={selected === ADD} onPress={() => setSelected(ADD)} color={c.secondary} />
-        </ScrollView>
-      )}
-
       {group ? (
-        <GroupView
+        <GroupDetail
           key={group.id}
           group={group}
-          userId={userId}
           refreshKey={refreshKey}
           compact={compact}
-          onLeft={() => void load(ADD)}
+          justJoined={justJoined === group.id}
+          onLeft={() => {
+            setSelected(null);
+            void load();
+          }}
+          onChanged={() => void load()}
         />
+      ) : mode === 'join' ? (
+        <JoinPanel initialCode={initialCode} defaultCategory={category} onRequested={() => void load()} onJoined={() => void load()} />
+      ) : mode === 'create' ? (
+        <CreatePanel defaultCategory={category} onCreated={(id) => openGroup(id)} />
+      ) : mode === 'find' ? (
+        <FindPanel defaultCategory={category} onJoined={(id) => openGroup(id, true)} />
       ) : (
-        <NoGroup
-          initialCode={initialCode}
-          defaultCategory={profile?.goal_type === 'gain' ? 'gain' : 'loss'}
-          hasGroups={groups.length > 0}
-          requests={requests}
-          onCreated={(id) => void load(id)}
-          onRequested={() => void load(ADD)}
-        />
+        <>
+          {!header && <TitleTile icon="account-group" title={t('group_access')} subtitle={t('group_access_sub')} />}
+          <AccessButton
+            icon="link-variant"
+            title={t('join_invited_group')}
+            sub={t('join_invited_sub')}
+            colors={[BRAND.blueLight, BRAND.blue]}
+            onPress={() => setMode('join')}
+          />
+          <AccessButton
+            icon="account-multiple-plus"
+            title={t('create_group')}
+            sub={t('create_group_sub')}
+            colors={[BRAND.greenLight, BRAND.green]}
+            onPress={() => setMode('create')}
+          />
+          <AccessButton icon="earth" title={t('find_open_groups')} sub={t('find_open_sub')} colors={['#A78BFA', '#7C3AED']} onPress={() => setMode('find')} />
+          <PendingRequests requests={requests} onChanged={() => void load()} />
+          <MyGroupsList groups={groups} onOpen={(id) => openGroup(id)} />
+        </>
       )}
     </Screen>
   );

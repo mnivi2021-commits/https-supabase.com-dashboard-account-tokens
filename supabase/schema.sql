@@ -30,6 +30,23 @@ create table if not exists public.profiles (
   updated_at        timestamptz not null default now()
 );
 
+-- Member numbers (HT001 …) — every profile gets one automatically.
+create sequence if not exists public.member_no_seq start 1;
+alter table public.profiles add column if not exists member_no int unique;
+alter table public.profiles add column if not exists share_pin text;
+
+-- SECURITY DEFINER: app users have no rights on the sequence itself.
+create or replace function public.assign_member_no()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if new.member_no is null then new.member_no := nextval('public.member_no_seq'); end if;
+  return new;
+end $$;
+drop trigger if exists profiles_member_no on public.profiles;
+create trigger profiles_member_no before insert on public.profiles
+  for each row execute function public.assign_member_no();
+update public.profiles set member_no = nextval('public.member_no_seq') where member_no is null;
+
 create table if not exists public.weight_logs (
   id         uuid primary key,
   user_id    uuid not null default auth.uid() references auth.users (id) on delete cascade,
@@ -137,6 +154,15 @@ create table if not exists public.groups (
   admin_id    uuid not null references auth.users (id) on delete cascade,
   created_at  timestamptz not null default now()
 );
+-- 'private' = invited family/friends group (max 5, admin approves, full data);
+-- 'open'    = anyone can find and join (max 50, limited data only).
+alter table public.groups add column if not exists kind text not null default 'private';
+alter table public.groups drop constraint if exists groups_kind_check;
+alter table public.groups add constraint groups_kind_check check (kind in ('private', 'open'));
+alter table public.groups add column if not exists description text not null default '';
+alter table public.groups add column if not exists helpline text;        -- set by the admin, members only
+alter table public.groups add column if not exists meeting_room text;    -- random Jitsi room id
+update public.groups set meeting_room = encode(uuid_send(gen_random_uuid()), 'hex') where meeting_room is null;
 
 -- A user can be in several groups (e.g. Family Group 1, Family Group 2, Friends Group).
 create table if not exists public.group_members (
@@ -148,6 +174,8 @@ create table if not exists public.group_members (
 );
 -- Older versions allowed only one group per user.
 alter table public.group_members drop constraint if exists group_members_user_id_key;
+-- "Shared Data" switch per group: OFF = others see only my name and member code.
+alter table public.group_members add column if not exists share_data boolean not null default true;
 create index if not exists group_members_user on public.group_members (user_id);
 
 -- Joining needs the admin's approval.
@@ -173,6 +201,10 @@ create index if not exists cheers_to_date on public.cheers (to_user, date);
 -- Helper functions (SECURITY DEFINER so RLS policies can use them
 -- without recursive policy checks)
 -- ---------------------------------------------------------------------
+
+-- "HT001"
+create or replace function public.member_label(n int)
+returns text language sql immutable as $$ select 'HT' || lpad(n::text, 3, '0') $$;
 
 create or replace function public.is_member(gid uuid)
 returns boolean language sql stable security definer set search_path = public as $$
@@ -205,12 +237,17 @@ returns boolean language sql stable security definer set search_path = public as
   );
 $$;
 
--- Max 5 members per group (row lock prevents two approvals at the same moment).
+-- Max 5 members in a private group, 50 in an open group
+-- (row lock prevents two joins at the same moment).
+create or replace function public.group_limit_for(p_kind text)
+returns int language sql immutable as $$ select case when p_kind = 'open' then 50 else 5 end $$;
+
 create or replace function public.enforce_group_limit()
 returns trigger language plpgsql as $$
+declare v_kind text;
 begin
-  perform 1 from public.groups where id = new.group_id for update;
-  if (select count(*) from public.group_members where group_id = new.group_id) >= 5 then
+  select kind into v_kind from public.groups where id = new.group_id for update;
+  if (select count(*) from public.group_members where group_id = new.group_id) >= public.group_limit_for(v_kind) then
     raise exception 'GROUP_FULL';
   end if;
   return new;
@@ -314,6 +351,7 @@ drop function if exists public.get_group_dashboard(date);
 drop function if exists public.get_group_summary(date, date);
 drop function if exists public.get_group_challenge(date);
 drop function if exists public.my_group_id();
+drop function if exists public.create_group(text, text, text, text);
 -- Return columns changed (food added), so recreate:
 drop function if exists public.get_group_dashboard(uuid, date);
 
@@ -321,7 +359,8 @@ drop function if exists public.get_group_dashboard(uuid, date);
 -- Group functions (called from the app with supabase.rpc)
 -- ---------------------------------------------------------------------
 
-create or replace function public.create_group(p_name text, p_category text default 'loss')
+create or replace function public.create_group(
+  p_name text, p_category text default 'loss', p_kind text default 'private', p_description text default '')
 returns public.groups language plpgsql security definer set search_path = public as $$
 declare
   g public.groups;
@@ -338,8 +377,12 @@ begin
     tries := tries + 1;
     if tries > 30 then raise exception 'CODE_GENERATION_FAILED'; end if;
   end loop;
-  insert into groups (name, invite_code, admin_id)
-  values (coalesce(nullif(trim(p_name), ''), 'My Group'), code, auth.uid())
+  insert into groups (name, invite_code, admin_id, kind, description, meeting_room)
+  values (
+    coalesce(nullif(trim(p_name), ''), 'My Group'), code, auth.uid(),
+    case when p_kind = 'open' then 'open' else 'private' end,
+    left(coalesce(trim(p_description), ''), 200),
+    encode(uuid_send(gen_random_uuid()), 'hex'))
   returning * into g;
   insert into group_members (group_id, user_id, category)
   values (g.id, auth.uid(), case when p_category = 'gain' then 'gain' else 'loss' end);
@@ -357,8 +400,13 @@ begin
   if exists (select 1 from group_members where group_id = g.id and user_id = auth.uid()) then
     raise exception 'ALREADY_MEMBER';
   end if;
-  if (select count(*) from group_members where group_id = g.id) >= 5 then
+  if (select count(*) from group_members where group_id = g.id) >= public.group_limit_for(g.kind) then
     raise exception 'GROUP_FULL';
+  end if;
+  if g.kind = 'open' then
+    insert into group_members (group_id, user_id, category)
+    values (g.id, auth.uid(), case when p_category = 'gain' then 'gain' else 'loss' end);
+    return 'JOINED:' || g.name;
   end if;
   insert into group_join_requests (group_id, user_id, category)
   values (g.id, auth.uid(), case when p_category = 'gain' then 'gain' else 'loss' end)
@@ -441,13 +489,14 @@ returns table (
   select
     gm.user_id,
     coalesce(p.name, '?'),
-    case when gm.user_id = auth.uid() or coalesce((p.share->>'workouts')::boolean, true) then w.minutes end,
-    case when gm.user_id = auth.uid() or coalesce((p.share->>'workouts')::boolean, true) then w.calories end,
-    case when gm.user_id = auth.uid() or coalesce((p.share->>'steps')::boolean, true) then s.steps end,
-    case when gm.user_id = auth.uid() or coalesce((p.share->>'sleep')::boolean, true) then sl.avg end,
-    case when gm.user_id = auth.uid() or coalesce((p.share->>'water')::boolean, true) then wa.ml end,
+    case when gm.user_id = auth.uid() or (gm.share_data and coalesce((p.share->>'workouts')::boolean, true)) then w.minutes end,
+    case when gm.user_id = auth.uid() or (gm.share_data and g.kind = 'private' and coalesce((p.share->>'workouts')::boolean, true)) then w.calories end,
+    case when gm.user_id = auth.uid() or (gm.share_data and coalesce((p.share->>'steps')::boolean, true)) then s.steps end,
+    case when gm.user_id = auth.uid() or (gm.share_data and g.kind = 'private' and coalesce((p.share->>'sleep')::boolean, true)) then sl.avg end,
+    case when gm.user_id = auth.uid() or (gm.share_data and g.kind = 'private' and coalesce((p.share->>'water')::boolean, true)) then wa.ml end,
     coalesce(w.days, 0)::int
   from group_members gm
+  join groups g on g.id = gm.group_id
   left join profiles p on p.id = gm.user_id
   left join lateral (
     select round(coalesce(sum(coalesce(x.minutes, x.reps * coalesce(x.sets, 1) * 3 / 60.0)), 0)) as minutes,
@@ -493,6 +542,8 @@ returns table (
     from group_members gm
     left join profiles p on p.id = gm.user_id
     where gm.group_id = p_group_id and public.is_member(p_group_id)
+      and (gm.share_data or gm.user_id = auth.uid())
+      and exists (select 1 from groups gx where gx.id = p_group_id and gx.kind = 'private')
   )
   select
     user_id, coalesce(name, '?'), category,
@@ -568,23 +619,43 @@ $$;
 revoke execute on function public.person_day(uuid, date) from public, anon, authenticated;
 
 -- One row per member of a group for a given day.
+-- Private group + Shared Data ON: everything the member shares.
+-- Open group + Shared Data ON: only steps, workout minutes/types and target %.
+-- Shared Data OFF: only name and member code. You always see your own row.
 create or replace function public.get_group_dashboard(p_group_id uuid, p_day date)
 returns table (
-  user_id uuid, name text, is_admin boolean, category text, photo_path text,
+  user_id uuid, name text, member_code text, is_admin boolean, category text, shares boolean, photo_path text,
   weight_kg numeric, bmi numeric, workout_minutes numeric, workout_calories numeric,
   workout_types text, steps int, sleep_hours numeric, water_ml int,
   food_kcal numeric, protein numeric, carbs numeric, fat numeric, target_pct int,
   cheers_today int, i_cheered boolean
 ) language sql stable security definer set search_path = public as $$
   select
-    gm.user_id, d.name, g.admin_id = gm.user_id, gm.category, d.photo_path,
-    d.weight_kg, d.bmi, d.workout_minutes, d.workout_calories, d.workout_types,
-    d.steps, d.sleep_hours, d.water_ml, d.food_kcal, d.protein, d.carbs, d.fat, d.target_pct,
+    gm.user_id, d.name, public.member_label(p.member_no), g.admin_id = gm.user_id, gm.category, gm.share_data,
+    case when x.full_ then d.photo_path end,
+    case when x.full_ then d.weight_kg end,
+    case when x.full_ then d.bmi end,
+    case when x.lim then d.workout_minutes end,
+    case when x.full_ then d.workout_calories end,
+    case when x.lim then d.workout_types end,
+    case when x.lim then d.steps end,
+    case when x.full_ then d.sleep_hours end,
+    case when x.full_ then d.water_ml end,
+    case when x.full_ then d.food_kcal end,
+    case when x.full_ then d.protein end,
+    case when x.full_ then d.carbs end,
+    case when x.full_ then d.fat end,
+    case when x.lim then d.target_pct end,
     (select count(*) from cheers c where c.to_user = gm.user_id and c.group_id = p_group_id and c.date = p_day)::int,
     exists (select 1 from cheers c where c.to_user = gm.user_id and c.from_user = auth.uid()
             and c.group_id = p_group_id and c.date = p_day)
   from group_members gm
   join groups g on g.id = gm.group_id
+  left join profiles p on p.id = gm.user_id
+  cross join lateral (
+    select (gm.user_id = auth.uid()) or (gm.share_data and g.kind = 'private') as full_,
+           (gm.user_id = auth.uid()) or gm.share_data as lim
+  ) x
   cross join lateral public.person_day(gm.user_id, p_day) d
   where gm.group_id = p_group_id and public.is_member(p_group_id)
   order by gm.joined_at;
@@ -653,14 +724,14 @@ to authenticated;
 
 -- Only signed-in users may call the functions.
 revoke execute on function
-  public.create_group(text, text), public.request_join(text, text), public.my_join_requests(),
+  public.create_group(text, text, text, text), public.request_join(text, text), public.my_join_requests(),
   public.list_join_requests(uuid), public.respond_join_request(uuid, uuid, boolean),
   public.leave_group(uuid), public.remove_member(uuid, uuid), public.set_my_category(uuid, text),
   public.get_group_dashboard(uuid, date), public.get_group_summary(uuid, date, date),
   public.get_group_challenge(uuid, date)
 from anon, public;
 grant execute on function
-  public.create_group(text, text), public.request_join(text, text), public.my_join_requests(),
+  public.create_group(text, text, text, text), public.request_join(text, text), public.my_join_requests(),
   public.list_join_requests(uuid), public.respond_join_request(uuid, uuid, boolean),
   public.leave_group(uuid), public.remove_member(uuid, uuid), public.set_my_category(uuid, text),
   public.get_group_dashboard(uuid, date), public.get_group_summary(uuid, date, date),
@@ -756,6 +827,272 @@ from anon, public;
 grant execute on function public.my_member_card(), public.reset_member_pin(), public.add_member(text, text, text)
 to authenticated;
 grant usage on sequence public.member_no_seq to service_role;
+
+-- =====================================================================
+-- Group Access v2: open groups, Shared Data switch, help line, meeting,
+-- Q&A board, group targets with rewards.
+-- =====================================================================
+
+-- My groups with member count and my role.
+create or replace function public.my_groups()
+returns table (
+  id uuid, name text, kind text, description text, invite_code text, admin_id uuid,
+  helpline text, meeting_room text, members int, is_admin boolean, my_share boolean, created_at timestamptz
+) language sql stable security definer set search_path = public as $$
+  select g.id, g.name, g.kind, g.description, g.invite_code, g.admin_id, g.helpline, g.meeting_room,
+         (select count(*) from group_members x where x.group_id = g.id)::int,
+         g.admin_id = auth.uid(), gm.share_data, g.created_at
+  from group_members gm join groups g on g.id = gm.group_id
+  where gm.user_id = auth.uid()
+  order by g.created_at;
+$$;
+
+-- Find open groups by name.
+create or replace function public.list_open_groups(p_search text default '')
+returns table (id uuid, name text, description text, members int, is_member boolean)
+language sql stable security definer set search_path = public as $$
+  select g.id, g.name, g.description,
+         (select count(*) from group_members x where x.group_id = g.id)::int,
+         public.is_member(g.id)
+  from groups g
+  where g.kind = 'open'
+    and (coalesce(trim(p_search), '') = '' or g.name ilike '%' || trim(p_search) || '%')
+  order by 4 desc, g.created_at desc
+  limit 30;
+$$;
+
+create or replace function public.join_open_group(p_group_id uuid, p_category text default 'loss')
+returns text language plpgsql security definer set search_path = public as $$
+declare g public.groups;
+begin
+  if auth.uid() is null then raise exception 'NOT_AUTHENTICATED'; end if;
+  select * into g from groups where id = p_group_id and kind = 'open';
+  if g.id is null then raise exception 'INVALID_CODE'; end if;
+  if public.is_member(g.id) then raise exception 'ALREADY_MEMBER'; end if;
+  if (select count(*) from group_members where user_id = auth.uid()) >= 10 then raise exception 'TOO_MANY_GROUPS'; end if;
+  insert into group_members (group_id, user_id, category)
+  values (g.id, auth.uid(), case when p_category = 'gain' then 'gain' else 'loss' end);
+  return g.name;
+end $$;
+
+create or replace function public.set_my_share_data(p_group_id uuid, p_on boolean)
+returns void language sql security definer set search_path = public as $$
+  update group_members set share_data = p_on where group_id = p_group_id and user_id = auth.uid();
+$$;
+
+-- Admin sets the group's help-line number (empty = remove).
+create or replace function public.set_group_helpline(p_group_id uuid, p_phone text)
+returns void language plpgsql security definer set search_path = public as $$
+declare v text := nullif(trim(coalesce(p_phone, '')), '');
+begin
+  if not public.is_group_admin(p_group_id) then raise exception 'NOT_ADMIN'; end if;
+  if v is not null and v !~ '^\+?[0-9][0-9 -]{5,18}$' then raise exception 'INVALID_PHONE'; end if;
+  update groups set helpline = v where id = p_group_id;
+end $$;
+
+-- ---------- Q&A board ----------
+
+create table if not exists public.group_questions (
+  id         uuid primary key default gen_random_uuid(),
+  group_id   uuid not null references public.groups (id) on delete cascade,
+  user_id    uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  body       text not null check (char_length(body) between 1 and 500),
+  created_at timestamptz not null default now()
+);
+create index if not exists group_questions_group on public.group_questions (group_id, created_at);
+
+create table if not exists public.group_answers (
+  id          uuid primary key default gen_random_uuid(),
+  question_id uuid not null references public.group_questions (id) on delete cascade,
+  user_id     uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  body        text not null check (char_length(body) between 1 and 500),
+  created_at  timestamptz not null default now()
+);
+create index if not exists group_answers_question on public.group_answers (question_id, created_at);
+
+alter table public.group_questions enable row level security;
+alter table public.group_answers enable row level security;
+
+drop policy if exists "members read questions" on public.group_questions;
+create policy "members read questions" on public.group_questions for select to authenticated
+  using (public.is_member(group_id));
+drop policy if exists "members ask" on public.group_questions;
+create policy "members ask" on public.group_questions for insert to authenticated
+  with check (user_id = auth.uid() and public.is_member(group_id));
+drop policy if exists "author or admin deletes question" on public.group_questions;
+create policy "author or admin deletes question" on public.group_questions for delete to authenticated
+  using (user_id = auth.uid() or public.is_group_admin(group_id));
+
+drop policy if exists "members read answers" on public.group_answers;
+create policy "members read answers" on public.group_answers for select to authenticated
+  using (exists (select 1 from public.group_questions q where q.id = question_id and public.is_member(q.group_id)));
+drop policy if exists "members answer" on public.group_answers;
+create policy "members answer" on public.group_answers for insert to authenticated
+  with check (user_id = auth.uid()
+    and exists (select 1 from public.group_questions q where q.id = question_id and public.is_member(q.group_id)));
+drop policy if exists "author or admin deletes answer" on public.group_answers;
+create policy "author or admin deletes answer" on public.group_answers for delete to authenticated
+  using (user_id = auth.uid()
+    or exists (select 1 from public.group_questions q where q.id = question_id and public.is_group_admin(q.group_id)));
+
+create or replace function public.get_group_qa(p_group_id uuid)
+returns table (id uuid, user_id uuid, author text, body text, created_at timestamptz, answers jsonb)
+language sql stable security definer set search_path = public as $$
+  select q.id, q.user_id, coalesce(p.name, '?'), q.body, q.created_at,
+         coalesce((
+           select jsonb_agg(jsonb_build_object(
+                    'id', a.id, 'user_id', a.user_id, 'author', coalesce(pa.name, '?'),
+                    'body', a.body, 'created_at', a.created_at) order by a.created_at)
+           from group_answers a left join profiles pa on pa.id = a.user_id
+           where a.question_id = q.id), '[]'::jsonb)
+  from group_questions q left join profiles p on p.id = q.user_id
+  where q.group_id = p_group_id and public.is_member(p_group_id)
+  order by q.created_at desc
+  limit 50;
+$$;
+
+-- ---------- Group targets + rewards ----------
+-- Rewards when the group reaches its target: 1st = Gold (100 pts), 2nd–3rd = Silver (50 pts),
+-- everyone else who contributed = +10 pts. Members with Shared Data OFF are not counted.
+
+create table if not exists public.group_targets (
+  id         uuid primary key default gen_random_uuid(),
+  group_id   uuid not null references public.groups (id) on delete cascade,
+  kind       text not null check (kind in ('steps', 'workout_minutes', 'calories', 'weight_loss')),
+  value      numeric(10, 1) not null check (value > 0),
+  start_date date not null,
+  end_date   date not null,
+  gold       boolean not null default true,
+  silver     boolean not null default true,
+  points     boolean not null default true,
+  created_by uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  check (end_date >= start_date)
+);
+create index if not exists group_targets_group on public.group_targets (group_id, start_date);
+alter table public.group_targets enable row level security;  -- no policies: functions only
+
+-- INTERNAL: each counted member's progress for one target, up to p_today.
+create or replace function public.target_values(p_target uuid, p_today date)
+returns table (user_id uuid, val numeric)
+language sql stable security definer set search_path = public as $$
+  with t as (select *, least(end_date, p_today) as upto from group_targets where id = p_target)
+  select gm.user_id,
+    coalesce(case t.kind
+      when 'steps' then (select sum(z.steps) from step_logs z
+                         where z.user_id = gm.user_id and z.date between t.start_date and t.upto)
+      when 'workout_minutes' then (select round(sum(coalesce(x.minutes, x.reps * coalesce(x.sets, 1) * 3 / 60.0))) from workouts x
+                         where x.user_id = gm.user_id and x.date between t.start_date and t.upto)
+      when 'calories' then (select round(sum(x.calories)) from workouts x
+                         where x.user_id = gm.user_id and x.date between t.start_date and t.upto)
+      when 'weight_loss' then greatest(0,
+          coalesce(
+            (select w.weight_kg from weight_logs w where w.user_id = gm.user_id and w.date <= t.start_date order by w.date desc limit 1),
+            (select w.weight_kg from weight_logs w where w.user_id = gm.user_id and w.date between t.start_date and t.upto order by w.date limit 1))
+          - (select w.weight_kg from weight_logs w where w.user_id = gm.user_id and w.date between t.start_date and t.upto order by w.date desc limit 1))
+    end, 0)::numeric
+  from t join group_members gm on gm.group_id = t.group_id
+  where gm.share_data;
+$$;
+revoke execute on function public.target_values(uuid, date) from public, anon, authenticated;
+
+-- Admin sets a target (this week, next week, this month …). Open groups: steps / workout minutes only.
+create or replace function public.set_group_target(
+  p_group_id uuid, p_kind text, p_value numeric, p_start date, p_end date,
+  p_gold boolean default true, p_silver boolean default true, p_points boolean default true)
+returns uuid language plpgsql security definer set search_path = public as $$
+declare v_id uuid; v_kind text;
+begin
+  if not public.is_group_admin(p_group_id) then raise exception 'NOT_ADMIN'; end if;
+  select kind into v_kind from groups where id = p_group_id;
+  if v_kind = 'open' and p_kind not in ('steps', 'workout_minutes') then raise exception 'OPEN_GROUP_LIMITED'; end if;
+  -- Replace any target in the same group that overlaps these dates.
+  delete from group_targets where group_id = p_group_id and start_date <= p_end and end_date >= p_start;
+  insert into group_targets (group_id, kind, value, start_date, end_date, gold, silver, points)
+  values (p_group_id, p_kind, p_value, p_start, p_end, p_gold, p_silver, p_points)
+  returning id into v_id;
+  return v_id;
+end $$;
+
+create or replace function public.delete_group_target(p_target uuid)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not exists (select 1 from group_targets t where t.id = p_target and public.is_group_admin(t.group_id)) then
+    raise exception 'NOT_ADMIN';
+  end if;
+  delete from group_targets where id = p_target;
+end $$;
+
+-- Targets of a group (latest first) with live totals; status relative to the phone's date.
+create or replace function public.get_group_targets(p_group_id uuid, p_today date)
+returns table (
+  id uuid, kind text, value numeric, start_date date, end_date date,
+  gold boolean, silver boolean, points boolean, total numeric, status text
+) language sql stable security definer set search_path = public as $$
+  select t.id, t.kind, t.value, t.start_date, t.end_date, t.gold, t.silver, t.points,
+         coalesce((select sum(v.val) from public.target_values(t.id, p_today) v), 0),
+         case when p_today < t.start_date then 'upcoming' when p_today > t.end_date then 'done' else 'active' end
+  from group_targets t
+  where t.group_id = p_group_id and public.is_member(p_group_id)
+  order by t.start_date desc
+  limit 20;
+$$;
+
+-- Leaderboard for one target. rnk is null for members with no progress (or not sharing).
+create or replace function public.get_target_board(p_target uuid, p_today date)
+returns table (user_id uuid, name text, member_code text, val numeric, rnk int, counted boolean)
+language sql stable security definer set search_path = public as $$
+  select gm.user_id, coalesce(p.name, '?'), public.member_label(p.member_no), v.val,
+         case when coalesce(v.val, 0) > 0 then (rank() over (order by coalesce(v.val, 0) desc))::int end,
+         v.user_id is not null
+  from group_targets t
+  join group_members gm on gm.group_id = t.group_id
+  left join profiles p on p.id = gm.user_id
+  left join public.target_values(p_target, p_today) v on v.user_id = gm.user_id
+  where t.id = p_target and public.is_member(t.group_id)
+  order by coalesce(v.val, -1) desc, gm.joined_at;
+$$;
+
+-- Points earned so far in a group (only targets the group actually reached).
+create or replace function public.get_group_points(p_group_id uuid, p_today date)
+returns table (user_id uuid, name text, gold int, silver int, total int)
+language sql stable security definer set search_path = public as $$
+  with tg as (
+    select t.*, (select coalesce(sum(v.val), 0) from public.target_values(t.id, p_today) v) as sum_val
+    from group_targets t
+    where t.group_id = p_group_id and public.is_member(p_group_id) and t.start_date <= p_today
+  ),
+  ranked as (
+    select a.gold as g_on, a.silver as s_on, a.points as p_on, v.user_id,
+           rank() over (partition by a.id order by v.val desc) as r
+    from tg a cross join lateral public.target_values(a.id, p_today) v
+    where a.sum_val >= a.value and v.val > 0
+  )
+  select r.user_id, coalesce(p.name, '?'),
+         count(*) filter (where r.r = 1 and r.g_on)::int,
+         count(*) filter (where r.r in (2, 3) and r.s_on)::int,
+         sum(case when r.r = 1 and r.g_on then 100
+                  when r.r in (2, 3) and r.s_on then 50
+                  when r.r >= 4 and r.p_on then 10 else 0 end)::int
+  from ranked r left join profiles p on p.id = r.user_id
+  group by r.user_id, p.name
+  order by 5 desc;
+$$;
+
+revoke execute on function
+  public.my_groups(), public.list_open_groups(text), public.join_open_group(uuid, text),
+  public.set_my_share_data(uuid, boolean), public.set_group_helpline(uuid, text), public.get_group_qa(uuid),
+  public.set_group_target(uuid, text, numeric, date, date, boolean, boolean, boolean),
+  public.delete_group_target(uuid), public.get_group_targets(uuid, date),
+  public.get_target_board(uuid, date), public.get_group_points(uuid, date)
+from anon, public;
+grant execute on function
+  public.my_groups(), public.list_open_groups(text), public.join_open_group(uuid, text),
+  public.set_my_share_data(uuid, boolean), public.set_group_helpline(uuid, text), public.get_group_qa(uuid),
+  public.set_group_target(uuid, text, numeric, date, date, boolean, boolean, boolean),
+  public.delete_group_target(uuid), public.get_group_targets(uuid, date),
+  public.get_target_board(uuid, date), public.get_group_points(uuid, date)
+to authenticated;
 
 -- ---------------------------------------------------------------------
 -- Table privileges for the API roles.

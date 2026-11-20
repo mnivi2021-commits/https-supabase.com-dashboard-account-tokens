@@ -1,6 +1,7 @@
-import * as Linking from 'expo-linking';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Alert, Image, Pressable, Share, View } from 'react-native';
+import { Alert, Image, Pressable, View } from 'react-native';
 
 import { Button, Card, Row, SectionTitle, Segmented, Txt } from '@/components/ui';
 import { signedPhotoUrls } from '@/data/sync';
@@ -23,7 +24,7 @@ import {
   setMyCategory,
   type ChallengeRow,
   type DashboardRow,
-  type Group,
+  type MyGroup,
   type JoinRequest,
   type SummaryRow,
 } from './api';
@@ -40,7 +41,7 @@ export function GroupView({
   compact = false,
   onLeft,
 }: {
-  group: Group;
+  group: MyGroup;
   userId: string;
   refreshKey: number;
   /** Group Login mode: only the invite card, join requests and member day reports. */
@@ -59,6 +60,8 @@ export function GroupView({
   const [error, setError] = useState<string | null>(null);
   /** The day shown in the member cards; ◀ ▶ move it back and forward. */
   const [day, setDay] = useState(todayKey());
+  /** Member rows opened to show their day report. */
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({ [userId]: true });
   const isAdmin = group.admin_id === userId;
   const me = today.find((r) => r.user_id === userId);
   const prevDay = addDays(day, -1);
@@ -111,17 +114,6 @@ export function GroupView({
   const showError = (e: unknown) => {
     const key = groupErrorKey(e);
     Alert.alert(t('error'), key ? t(key) : String((e as Error).message ?? e));
-  };
-
-  const inviteLink = Linking.createURL('/join', { queryParams: { code: group.invite_code } });
-  const inviteText = t('invite_message', { group: group.name, code: group.invite_code, link: inviteLink });
-
-  const shareWhatsApp = async () => {
-    try {
-      await Linking.openURL(`whatsapp://send?text=${encodeURIComponent(inviteText)}`);
-    } catch {
-      await Share.share({ message: inviteText });
-    }
   };
 
   const respond = async (r: JoinRequest, approve: boolean) => {
@@ -183,28 +175,6 @@ export function GroupView({
 
   return (
     <>
-      <Card style={{ backgroundColor: c.primarySoft, borderColor: c.primary }}>
-        <Txt size="title" bold>
-          {group.name}
-        </Txt>
-        <Txt muted>
-          {t('members_count', { n: today.length })} {isAdmin ? `· ${t('you_are_admin')}` : ''}
-        </Txt>
-        <Row style={{ justifyContent: 'space-between', marginTop: 10 }}>
-          <View>
-            <Txt muted size="small">
-              {t('invite_code')}
-            </Txt>
-            <Txt size="hero" bold color={c.primary} style={{ letterSpacing: 4 }}>
-              {group.invite_code}
-            </Txt>
-          </View>
-          <View style={{ gap: 8 }}>
-            <Button small icon="whatsapp" title="WhatsApp" onPress={shareWhatsApp} style={{ backgroundColor: '#25D366', borderColor: '#25D366' }} />
-            <Button small variant="outline" icon="share-variant" title={t('share')} onPress={() => Share.share({ message: inviteText })} />
-          </View>
-        </Row>
-      </Card>
 
       {isAdmin && requests.length > 0 && (
         <Card style={{ borderColor: c.warning, borderWidth: 2 }}>
@@ -292,8 +262,16 @@ export function GroupView({
         <Button small variant="ghost" icon="calendar-today" title={t('back_to_today')} onPress={() => setDay(todayKey())} />
       )}
       {today.map((r) => (
+        <View key={r.user_id} style={{ gap: 8 }}>
+          <MemberRow
+            row={r}
+            photo={r.photo_path ? photos[r.photo_path] : null}
+            mine={r.user_id === userId}
+            open={!!expanded[r.user_id]}
+            onPress={() => setExpanded((e) => ({ ...e, [r.user_id]: !e[r.user_id] }))}
+          />
+          {expanded[r.user_id] && (
         <MemberCard
-          key={r.user_id}
           dayLabel={dayLabel(day)}
           prevLabel={dayLabel(prevDay)}
           today={r}
@@ -304,6 +282,8 @@ export function GroupView({
           onCheer={() => cheer(r)}
           onRemove={() => confirmRemove(r)}
         />
+          )}
+        </View>
       ))}
       <Txt muted size="small">
         🔒 = {t('not_shared')} · ✅ = {t('target_achieved')}
@@ -311,7 +291,7 @@ export function GroupView({
 
       {!compact && (
         <>
-          <ChallengeCard rows={challenge} lastMonth={lastMonth} />
+          {group.kind !== 'open' && <ChallengeCard rows={challenge} lastMonth={lastMonth} />}
 
           <Card>
             <SectionTitle>{t('group_summary')}</SectionTitle>
@@ -613,4 +593,80 @@ function daysInMonthLeft(): number {
   let n = 0;
   for (let k = today; k.slice(0, 7) === today.slice(0, 7); k = addDays(k, 1)) n++;
   return n - 1;
+}
+
+/** Compact member row (design): photo, name, role, member code with copy. */
+function MemberRow({
+  row,
+  photo,
+  mine,
+  open,
+  onPress,
+}: {
+  row: DashboardRow;
+  photo: string | null;
+  mine: boolean;
+  open: boolean;
+  onPress: () => void;
+}) {
+  const { t, colors: c } = useSettings();
+  const copy = async () => {
+    if (!row.member_code) return;
+    await Clipboard.setStringAsync(row.member_code);
+    Alert.alert(t('copied'), row.member_code);
+  };
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityState={{ expanded: open }}
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        padding: 10,
+        borderRadius: 16,
+        borderWidth: mine ? 2 : 1,
+        borderColor: mine ? c.primary : c.border,
+        backgroundColor: c.card,
+      }}
+    >
+      {photo ? (
+        <Image source={{ uri: photo }} style={{ width: 48, height: 48, borderRadius: 24 }} />
+      ) : (
+        <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: c.secondarySoft, alignItems: 'center', justifyContent: 'center' }}>
+          <Txt bold size="large" color={c.secondary}>
+            {(row.name[0] ?? '?').toUpperCase()}
+          </Txt>
+        </View>
+      )}
+      <View style={{ flex: 1 }}>
+        <Txt bold numberOfLines={1}>
+          {row.name}
+          {mine ? ` (${t('you')})` : ''}
+        </Txt>
+        <Txt size="small" muted>
+          {row.is_admin ? `👑 ${t('admin')}` : `✅ ${t('member')}`}
+          {row.shares === false ? ` · 🔒 ${t('not_shared')}` : ''}
+        </Txt>
+      </View>
+      {row.member_code ? (
+        <Pressable
+          onPress={copy}
+          accessibilityRole="button"
+          accessibilityLabel={`${t('member_code')} ${row.member_code}`}
+          style={{ backgroundColor: c.primarySoft, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4, alignItems: 'center' }}
+        >
+          <Txt size="small" muted>
+            {t('member_code')}
+          </Txt>
+          <Row gap={4}>
+            <Txt bold>{row.member_code}</Txt>
+            <MaterialCommunityIcons name="content-copy" size={16} color={c.primary} />
+          </Row>
+        </Pressable>
+      ) : null}
+      <MaterialCommunityIcons name={open ? 'chevron-up' : 'chevron-down'} size={24} color={c.muted} />
+    </Pressable>
+  );
 }

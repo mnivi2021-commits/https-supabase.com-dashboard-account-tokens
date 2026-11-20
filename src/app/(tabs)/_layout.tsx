@@ -16,7 +16,7 @@ const TABS: { name: string; title: TKey; icon: IconName }[] = [
   { name: 'profile', title: 'tab_profile', icon: 'account-circle' },
 ];
 
-const BRANDED = new Set(['workout']);
+const BRANDED = new Set(['workout', 'group']);
 
 export default function TabsLayout() {
   const { colors: c, t } = useSettings();
